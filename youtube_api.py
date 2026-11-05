@@ -1,6 +1,7 @@
 """YouTube Data API v3 integration module."""
 
 import re
+import time
 from datetime import datetime
 
 from googleapiclient.discovery import build
@@ -176,37 +177,57 @@ def get_video_captions(video_id: str) -> str | None:
     return None
 
 
+def _clean_caption(text: str) -> str:
+    """Drop auto-caption noise: speaker markers (>>) and sound tags like [음악]."""
+    text = re.sub(r"\[[^\]]*\]", " ", text)
+    text = text.replace(">>", " ")
+    return re.sub(r"\s+", " ", text).strip()
+
+
 def get_transcript(video_id: str) -> str | None:
-    """The video's spoken transcript only (Korean, then auto-generated Korean, then English)."""
+    """The video's spoken captions only: Korean auto-generated (CC) first, then Korean
+    uploaded captions, then any other track translated to Korean.
+
+    Uses the youtube-transcript-api 1.x instance API (`list`, snippets with `.text`).
+    """
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
-
-        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-
-        # Prefer Korean, then auto-generated Korean, then any available
-        transcript = None
-        try:
-            transcript = transcript_list.find_transcript(["ko"])
-        except Exception:
-            try:
-                transcript = transcript_list.find_generated_transcript(["ko"])
-            except Exception:
-                try:
-                    transcript = transcript_list.find_transcript(["en"])
-                except Exception:
-                    pass
-
-        if transcript:
-            entries = transcript.fetch()
-            text = " ".join(entry["text"] for entry in entries)
-            return text.strip() if text.strip() else None
-
+        from requests.exceptions import ConnectionError as RequestsConnectionError
     except ImportError:
-        pass  # youtube-transcript-api not installed
-    except Exception as e:
-        config.log_error("get_transcript", e, f"videoId={video_id}")
+        return None
 
-    return None
+    # Connections to youtube.com here occasionally fail TLS verification for a few
+    # minutes at a time, so a short retry rides out the bad window.
+    for attempt in range(3):
+        try:
+            return _fetch_transcript(YouTubeTranscriptApi(), video_id)
+        except RequestsConnectionError as e:
+            if attempt == 2:
+                config.log_error("get_transcript", e, f"videoId={video_id}")
+                return None
+            time.sleep(1.0 * (attempt + 1))
+        except Exception as e:
+            config.log_error("get_transcript", e, f"videoId={video_id}")
+            return None
+
+
+def _fetch_transcript(api, video_id: str) -> str | None:
+    transcripts = api.list(video_id)
+    transcript = None
+    for find in (transcripts.find_generated_transcript, transcripts.find_manually_created_transcript):
+        try:
+            transcript = find(["ko"])
+            break
+        except Exception:
+            continue
+    if transcript is None:
+        first = next(iter(transcripts), None)
+        if first is None:
+            return None
+        transcript = first.translate("ko") if first.is_translatable else first
+
+    text = _clean_caption(" ".join(snippet.text for snippet in transcript.fetch()))
+    return text or None
 
 
 def search_trending_videos(keyword: str = "연애", max_results: int = 10) -> dict:
