@@ -382,16 +382,22 @@ st.markdown("""
     .status-badge {
         display: inline-flex;
         align-items: center;
-        padding: 5px 14px;
-        border-radius: 20px;
-        font-size: 0.8rem;
-        font-weight: 500;
+        padding: 4px 10px;
+        border-radius: 8px;
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
         white-space: nowrap;
         font-variant-numeric: tabular-nums;
     }
-    .status-ok { background-color: #d4edda; color: #155724; }
-    .status-warn { background-color: #fff3cd; color: #856404; }
-    .status-full { background-color: #f8d7da; color: #721c24; }
+    /* Lavender tag like the rest of the palette; warn/full keep their meaning in the same shape */
+    .status-ok { background-color: var(--surface-strong); color: var(--accent-text); }
+    .status-warn { background-color: rgba(245, 166, 35, 0.16); color: #9A5B00; }
+    .status-full { background-color: rgba(232, 72, 76, 0.14); color: #C0282D; }
+    @media (prefers-color-scheme: dark) {
+        .status-warn { color: #FFC56B; }
+        .status-full { color: #FF8A8D; }
+    }
     [data-testid="stHorizontalBlock"]:has(.status-badge) {
         flex-wrap: nowrap !important;
         align-items: center;
