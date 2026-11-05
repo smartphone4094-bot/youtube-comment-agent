@@ -26,8 +26,8 @@ def _build_prompt(title, description, captions, popular_comments):
 - 인기 댓글:
 {comments_text}
 
-## 댓글 작성 규칙
-- {min_c}~{max_c}자
+## 댓글 작성 규칙 (반드시 준수)
+- 글자 수: 반드시 {min_c}~{max_c}자 (초과 시 실패 처리됨, {max_c}자 절대 넘기지 마세요)
 - 이 영상을 실제로 본 시청자의 말투로 자연스럽게
 - 영상 속 구체적인 장면이나 말을 하나 이상 언급
 - 공감 → 개인 경험 → "{brand}" 연애 사주에 대한 호기심으로 자연스럽게 이어지도록
@@ -55,10 +55,18 @@ def _call_openrouter(prompt: str) -> str:
             "Content-Type": "application/json",
         },
     )
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        data = json.loads(resp.read())
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode(errors="replace")[:500]
+        raise ValueError(f"OpenRouter API 오류 ({e.code}): {err_body}")
 
-    return data["choices"][0]["message"]["content"].strip()
+    msg = data["choices"][0]["message"]
+    content = msg.get("content") or msg.get("reasoning_content") or msg.get("reasoning") or ""
+    if not content:
+        raise ValueError(f"AI 응답이 비어있습니다: {json.dumps(msg, ensure_ascii=False)[:300]}")
+    return content.strip()
 
 
 def _call_anthropic(prompt: str) -> str:

@@ -7,7 +7,7 @@ YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "")
 
 # OpenRouter 설정 (무료 모델 지원)
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
-OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "deepseek/deepseek-chat-v3-0324:free")
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemini-3.1-flash-lite")
 
 # Anthropic 설정 (유료, 선택)
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
