@@ -1707,12 +1707,11 @@ def _render_scroll_anchor():
 
 
 def _select_video(video: dict):
-    with st.spinner("상세 정보 로딩 중..."):
-        try:
-            st.session_state.selected_video = youtube_api.get_video_details(video["videoId"]) or video
-        except Exception as e:
-            config.log_error("get_video_details", e, f"videoId={video.get('videoId')}")
-            st.session_state.selected_video = video
+    try:
+        st.session_state.selected_video = youtube_api.get_video_details(video["videoId"]) or video
+    except Exception as e:
+        config.log_error("get_video_details", e, f"videoId={video.get('videoId')}")
+        st.session_state.selected_video = video
     _reset_generation()
     go_to_step(2)
 
