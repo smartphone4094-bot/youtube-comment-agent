@@ -15,10 +15,28 @@ if (-not (Test-Path $venvPython)) {
 & $venvPython -m pip install --disable-pip-version-check -q -r requirements-build.txt
 if ($LASTEXITCODE) { throw "pip install failed" }
 
-& $venvPython -m PyInstaller --noconfirm --clean MarketingAI.spec
-if ($LASTEXITCODE) { throw "PyInstaller failed" }
+# PyInstaller wipes dist\MarketingAI, which may hold a running copy's keys and logged-in profiles.
+# Park them outside, build and zip without them, then put them back.
+$app = Join-Path $PSScriptRoot "dist\MarketingAI"
+$keep = Join-Path $PSScriptRoot "build\user-files"
+if (Test-Path $keep) { throw "$keep exists from an interrupted build; move its files back into $app first" }
+$userFiles = @("settings.yaml", "data") | Where-Object { Test-Path (Join-Path $app $_) }
+if ($userFiles) {
+    New-Item -ItemType Directory -Force $keep | Out-Null
+    foreach ($f in $userFiles) { Move-Item (Join-Path $app $f) $keep }
+}
+try {
+    & $venvPython -m PyInstaller --noconfirm --clean MarketingAI.spec
+    if ($LASTEXITCODE) { throw "PyInstaller failed" }
 
-$zip = Join-Path $PSScriptRoot "dist\MarketingAI.zip"
-if (Test-Path $zip) { Remove-Item $zip -Force }
-Compress-Archive -Path (Join-Path $PSScriptRoot "dist\MarketingAI") -DestinationPath $zip
-Write-Host "Built: dist\MarketingAI\MarketingAI.exe and $zip"
+    $zip = Join-Path $PSScriptRoot "dist\MarketingAI.zip"
+    if (Test-Path $zip) { Remove-Item $zip -Force }
+    Compress-Archive -Path $app -DestinationPath $zip
+    Write-Host "Built: dist\MarketingAI\MarketingAI.exe and $zip"
+} finally {
+    if ($userFiles) {
+        New-Item -ItemType Directory -Force $app | Out-Null
+        foreach ($f in $userFiles) { Move-Item (Join-Path $keep $f) $app }
+        Remove-Item $keep
+    }
+}
