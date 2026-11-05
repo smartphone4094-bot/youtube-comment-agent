@@ -48,6 +48,11 @@ st.markdown("""
         --text-secondary: color-mix(in srgb, currentColor 62%, transparent);
         --hairline: rgba(128, 128, 128, 0.22);
         --fill: rgba(128, 128, 128, 0.12);
+        --border-strong: rgba(128, 128, 128, 0.38);
+        /* One accent, reserved for the main action on each screen */
+        --accent: #E8484C;
+        --accent-hover: #D33C40;
+        --accent-ring: rgba(232, 72, 76, 0.28);
         --font-system: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI",
             "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
     }
@@ -63,9 +68,14 @@ st.markdown("""
         pointer-events: none;
     }
     [data-testid="stMainBlockContainer"] {
-        max-width: 980px;
+        max-width: 960px;
         margin-inline: auto;
-        padding-top: 2.5rem !important;
+        padding-top: 3rem !important;
+        padding-bottom: 6rem !important;
+    }
+    /* Breathing room between stacked elements */
+    [data-testid="stMainBlockContainer"] [data-testid="stVerticalBlock"] {
+        gap: 1.1rem;
     }
 
     /* ── Typography: tracking and leading follow size ── */
@@ -87,6 +97,20 @@ st.markdown("""
         letter-spacing: -0.015em;
         word-break: keep-all;
     }
+    .stApp h3 {
+        font-size: 1.5rem !important;
+        font-weight: 700 !important;
+        padding-top: 0.75rem !important;
+        padding-bottom: 0 !important;
+    }
+    /* Streamlit pulls the next element up under headings; let the block gap do the spacing */
+    [data-testid="stHeading"] [data-testid="stMarkdownContainer"] {
+        margin-bottom: 0 !important;
+    }
+    [data-testid="stWidgetLabel"] p {
+        font-size: 0.85rem !important;
+        font-weight: 600 !important;
+    }
     [data-testid="stMarkdownContainer"] {
         word-break: keep-all;
         overflow-wrap: anywhere;
@@ -96,9 +120,58 @@ st.markdown("""
     .stButton button,
     [data-testid="stPopover"] button {
         border-radius: 10px !important;
-        font-weight: 500 !important;
+        font-weight: 600 !important;
         transition: transform 160ms var(--ease-out), background-color 150ms ease,
             border-color 150ms ease, color 150ms ease, box-shadow 150ms ease !important;
+    }
+    .stButton button {
+        min-height: 44px;
+        padding: 0.55rem 1.1rem !important;
+    }
+    .stButton button p {
+        font-size: 0.95rem !important;
+        font-weight: 600 !important;
+    }
+    /* Primary: solid accent with a soft lift */
+    .stButton button[kind="primary"] {
+        background: var(--accent) !important;
+        border: 1px solid var(--accent) !important;
+        color: #fff !important;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(232, 72, 76, 0.22),
+            inset 0 1px 0 rgba(255, 255, 255, 0.16);
+    }
+    @media (hover: hover) and (pointer: fine) {
+        .stButton button[kind="primary"]:hover:not(:disabled) {
+            background: var(--accent-hover) !important;
+            border-color: var(--accent-hover) !important;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), 0 4px 14px rgba(232, 72, 76, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.16);
+        }
+    }
+    /* Secondary: a visible outline that fills on hover */
+    .stButton button[kind="secondary"] {
+        background: transparent !important;
+        border: 1px solid var(--border-strong) !important;
+        color: inherit !important;
+    }
+    @media (hover: hover) and (pointer: fine) {
+        .stButton button[kind="secondary"]:hover:not(:disabled) {
+            background: var(--fill) !important;
+            border-color: color-mix(in srgb, currentColor 45%, transparent) !important;
+        }
+    }
+    .stButton button:focus-visible {
+        outline: none !important;
+        box-shadow: 0 0 0 3px var(--accent-ring) !important;
+    }
+    /* Disabled: clearly present, clearly unavailable */
+    .stButton button:disabled {
+        background: var(--fill) !important;
+        border: 1px dashed var(--border-strong) !important;
+        color: var(--text-secondary) !important;
+        box-shadow: none !important;
+        cursor: not-allowed;
+        opacity: 1 !important;
     }
     .stButton button:active:not(:disabled),
     [data-testid="stPopover"] button:active:not(:disabled) {
@@ -119,8 +192,14 @@ st.markdown("""
     }
 
     hr {
-        margin: 1rem 0 !important;
+        margin: 0.75rem 0 !important;
         border-color: var(--hairline) !important;
+    }
+    [data-testid="stExpander"] summary {
+        padding-block: 0.8rem !important;
+    }
+    [data-testid="stAlert"] [data-testid="stMarkdownContainer"] p {
+        line-height: 1.65;
     }
     .stExpander details {
         border-radius: 12px !important;
@@ -131,6 +210,9 @@ st.markdown("""
     }
 
     /* ── Video rows ── */
+    [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] .thumb) {
+        gap: 1.25rem;
+    }
     .thumb {
         position: relative;
         aspect-ratio: 16 / 9;
@@ -205,9 +287,8 @@ st.markdown("""
         margin-top: auto;
     }
     [class*="st-key-select_"] button {
-        min-width: 88px;
-        padding-left: 20px !important;
-        padding-right: 20px !important;
+        min-width: 96px;
+        padding-inline: 1.4rem !important;
     }
 
     /* ── Status badge ── */
@@ -254,7 +335,7 @@ st.markdown("""
         max-width: 100%;
         align-items: center;
         gap: 4px;
-        margin: 0.25rem auto 0.5rem;
+        margin: 0.75rem auto 1rem;
         padding: 5px;
         background: color-mix(in srgb, Canvas 72%, transparent);
         -webkit-backdrop-filter: blur(20px) saturate(180%);
@@ -274,9 +355,10 @@ st.markdown("""
         white-space: nowrap;
         transition: background-color 200ms var(--ease-out), color 200ms var(--ease-out);
     }
+    /* Neutral ink for "you are here", so the accent stays on the action buttons */
     .step-item.active {
-        background: #4A90D9;
-        color: #fff;
+        background: CanvasText;
+        color: Canvas;
         font-weight: 600;
     }
     .step-item.completed {
@@ -303,8 +385,8 @@ st.markdown("""
         font-variant-numeric: tabular-nums;
     }
     .step-item.active .step-num {
-        background: #fff;
-        color: #4A90D9;
+        background: Canvas;
+        color: CanvasText;
     }
     .step-item.completed .step-num {
         background: #28a745;
