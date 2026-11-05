@@ -151,24 +151,21 @@ st.markdown("""
         position: relative;
         min-height: 52px;
         border-radius: 9999px !important;
-        padding-left: 3.6rem;
+        padding-left: 5.1rem;
         padding-right: 2.8rem;
         box-shadow: 0 3px 12px rgba(138, 124, 240, 0.1);
     }
     .st-key-keyword_input [data-baseweb="input"]::before {
-        content: "운";
+        content: "키워드";
         position: absolute;
-        left: 1.15rem;
+        left: 1.25rem;
         top: 50%;
-        transform: translateY(-50%) skewX(-9deg);
-        padding-right: 0.8rem;
-        font-size: 1.35rem;
-        font-weight: 900;
+        transform: translateY(-50%);
+        font-size: 0.92rem;
+        font-weight: 700;
         line-height: 1;
-        background: linear-gradient(160deg, #B8AFFF 0%, #9B8FFF 45%, #7B6FDF 100%);
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
+        letter-spacing: -0.01em;
+        color: var(--accent-text);
         pointer-events: none;
     }
     .st-key-keyword_input [data-baseweb="input"]::after {
