@@ -573,13 +573,20 @@ st.markdown("""
         white-space: nowrap;
         font-variant-numeric: tabular-nums;
     }
-    /* Lavender tag like the rest of the palette; warn/full keep their meaning in the same shape */
-    .status-ok { background-color: var(--surface-strong); color: var(--accent-text); }
-    .status-warn { background-color: rgba(245, 166, 35, 0.16); color: #9A5B00; }
-    .status-full { background-color: rgba(232, 72, 76, 0.14); color: #C0282D; }
+    /* White tag like the account button beside it; only the count carries color.
+       Running low / used up turn the count and the tail orange / red. */
+    .status-badge {
+        background: var(--card);
+        border: 1px solid var(--hairline);
+        box-shadow: var(--soft-shadow);
+        color: var(--text-secondary);
+    }
+    .status-ok b { color: var(--accent-text); }
+    .status-warn b, .status-warn .status-tail { color: #9A5B00; }
+    .status-full b, .status-full .status-tail { color: #C0282D; }
     @media (prefers-color-scheme: dark) {
-        .status-warn { color: #FFC56B; }
-        .status-full { color: #FF8A8D; }
+        .status-warn b, .status-warn .status-tail { color: #FFC56B; }
+        .status-full b, .status-full .status-tail { color: #FF8A8D; }
     }
     .status-badge b {
         font-weight: 800;
@@ -1162,7 +1169,7 @@ else:
     badge_class, badge_tail = "status-ok", f"{remaining}개 남음"
 st.markdown(
     f'<span class="status-badge {badge_class}">오늘 <b>{posted_today}</b>/{daily_max}'
-    f'<span class="status-dot">·</span>{badge_tail}</span>',
+    f'<span class="status-dot">·</span><span class="status-tail">{badge_tail}</span></span>',
     unsafe_allow_html=True,
 )
 
