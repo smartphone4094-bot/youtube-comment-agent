@@ -66,33 +66,39 @@
 ### 아키텍처
 
 ```
-[React Frontend] ←→ [Express Backend]
-                        ├── YouTube Data API v3 (영상 검색/자막)
-                        ├── Claude API (댓글 생성)
-                        ├── Playwright (크롬 프로필 자동화)
-                        └── SQLite (기록 저장)
+[Streamlit 대시보드 (app.py)]
+    ├── youtube_api.py        YouTube Data API v3 + youtube-transcript-api
+    ├── ai_comment.py         AI 서비스 4종 (Gemini · Claude · OpenRouter · OpenAI)
+    ├── browser_automation.py Playwright + 설치된 Chrome (Google 로그인 · 댓글 게시)
+    ├── database.py           SQLite (게시 기록 · 하루 상한 · 영상당 1개)
+    └── config.py             settings.yaml (키 · 모델 · 계정 · 규칙)
 ```
 
-### YouTube API 활용
-- `search.list`: 연애 키워드로 최신 영상 검색
+### 영상 정보 수집
+- `search.list`: 키워드로 최신 영상 검색 (URL 직접 입력도 지원)
 - `videos.list`: 영상 상세 정보 (조회수, 설명 등)
-- `captions.list` + `captions.download`: 자막 가져오기
-- `commentThreads.list`: 인기 댓글 가져오기
+- `commentThreads.list`: 인기 댓글
+- 자막: YouTube API의 `captions.download`는 영상 주인만 쓸 수 있어 `youtube-transcript-api`로 가져옴. 자막이 없으면 제목·설명만으로 분석
 
-### AI 댓글 생성 흐름
-1. 영상 자막/제목/설명 + 인기 댓글 수집
-2. Claude에게 영상 맥락 분석 요청 → 연애 고민 한 줄 요약
-3. 시청자 페르소나로 운명원 유도 댓글 초안 생성
-4. 40~120자 제약 확인
+### AI 댓글 생성 흐름 (`ai_comment.generate_comment`)
+1. **영상 분석**: 제목·설명·자막·인기 댓글로 JSON 생성
+   - `concern`: 영상 속 연애 고민 한 줄 (화면의 "영상 속 고민 한 줄")
+   - `scenes`: 영상 속 구체적인 말·장면 3개 (맥락 없이도 뜻이 통하는 것만)
+   - `viewer`: 이 영상에 댓글을 달 법한 시청자 한 명
+2. **후보 3개 작성**: 그 시청자가 되어 작성. 운명원으로 이어지는 주제는 코드에서 후보마다 다르게 뽑고, 실제 댓글은 말투 참고용으로만 줌. 운명원 이름이 없거나, 예시 문장·실제 댓글을 베낀 후보는 버림
+3. **심사·윤문**: im-not-ai 룰북(MIT)으로 가장 나은 후보를 고르고, 어색하다고 진단된 문장만 고침. 고친 결과는 변경률 50% 미만·글자 수·브랜드 포함·새 숫자 없음 조건을 통과해야 하고, 원본과 순서를 섞어 비교해 더 나을 때만 채택
+4. **길이 맞춤**: 40~120자를 벗어나면 줄여 쓰기를 최대 2번 요청
 
-### Playwright 자동화 흐름
-1. `launchPersistentContext`로 크롬 프로필 열기
-2. 유튜브 영상 페이지 이동
-3. 댓글 입력란 클릭
-4. 한 글자씩 타이핑 (사람처럼)
-5. 게시 버튼 클릭
-6. 댓글 게시 확인
-7. 상태 실시간 전송 (WebSocket)
+AI 서비스는 설정에서 고른 서비스부터 쓰고, 한도·오류가 나면 키가 있는 다음 서비스로 바로 넘어감. 댓글을 쓰는 단계(2·4)는 한국어 품질이 가장 좋았던 Gemini를 먼저 씀.
+
+### Playwright 게시 흐름 (`browser_automation.post_comment`)
+1. 연결된 계정 중 하나를 무작위로 골라 `launch_persistent_context`로 Chrome 프로필 열기
+2. 영상 페이지 이동 → 스크롤해서 댓글 입력란 클릭
+3. 한 글자씩 불규칙한 간격으로 타이핑
+4. 게시 버튼 클릭 후 잠시 대기
+5. 진행 상태는 Streamlit 진행 바로 표시 (프로필 여는 중 → 영상 페이지 이동 중 → 댓글 창 찾는 중 → 입력 중 → 게시 중 → 게시완료)
+
+현재 한계: 게시 후 댓글이 실제로 달렸는지 화면에서 다시 확인하지 않고, 실패 시 화면 캡처도 저장하지 않음.
 
 ### 설정 예시
 ```yaml

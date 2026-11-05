@@ -10,53 +10,45 @@
 | 2. 댓글 생성 | AI가 영상 자막·인기 댓글을 분석하여 시청자 페르소나 기반 댓글 초안 생성, 자동 심사·윤문 |
 | 3. 댓글 게시 | 연결된 Google 계정으로 자동 게시, 프로필 랜덤 선택 |
 
-## 기술 스택
+## 댓글 생성 흐름
 
-### 프레임워크 & 런타임
+1. **영상 분석**: 제목·설명·자막·인기 댓글로 영상 속 연애 고민 한 줄, 구체적인 장면·말 3개, 댓글을 달 법한 시청자 한 명을 뽑음
+2. **후보 3개 작성**: 그 시청자가 되어 쓰고, 운명원으로 이어지는 주제는 후보마다 다르게 배정. 운명원 이름이 없거나 실제 댓글을 베낀 후보는 버림
+3. **심사·윤문**: im-not-ai 룰북으로 가장 나은 후보를 고르고 어색한 문장만 고침. 고친 문장이 원본보다 나을 때만 채택
+4. **길이 맞춤**: 40~120자를 벗어나면 줄여 쓰기 요청
 
-| 기술 | 용도 | 라이선스 |
-|------|------|----------|
-| [Python](https://www.python.org/) 3.12+ | 런타임 | PSF License |
-| [Streamlit](https://streamlit.io/) 1.40 | 웹 대시보드 UI | Apache 2.0 |
+AI 서비스는 설정에서 고른 것부터 쓰고, 한도·오류가 나면 키가 있는 다음 서비스로 바로 넘어갑니다. 댓글을 쓰는 단계는 Gemini를 먼저 씁니다. 자세한 설계는 [docs/TASK_ANALYSIS.md](docs/TASK_ANALYSIS.md)에 있습니다.
 
-### AI / LLM
+## 사용한 오픈소스
 
-| 기술 | 용도 | 비고 |
-|------|------|------|
-| [Google Gemini API](https://ai.google.dev/) | 댓글 작성 (기본) | API 키 필요 |
-| [Anthropic Claude API](https://docs.anthropic.com/) | 댓글 작성 (대체) | API 키 필요 |
-| [OpenRouter](https://openrouter.ai/) | 댓글 작성 (대체) | API 키 필요 |
-| [OpenAI API](https://platform.openai.com/) | 댓글 작성 (대체) | API 키 필요 |
+| 오픈소스 | 버전 | 라이선스 | 용도 |
+|----------|------|----------|------|
+| [Python](https://www.python.org/) | 3.12 | PSF License | 런타임 |
+| [Streamlit](https://github.com/streamlit/streamlit) | 1.40.2 | Apache 2.0 | 대시보드 UI |
+| [Playwright for Python](https://github.com/microsoft/playwright-python) | 1.49.1 | Apache 2.0 | Chrome 자동화 (Google 로그인 · 댓글 게시) |
+| [google-api-python-client](https://github.com/googleapis/google-api-python-client) | 2.154.0 | Apache 2.0 | YouTube Data API 호출 |
+| [youtube-transcript-api](https://github.com/jdepoix/youtube-transcript-api) | 1.2.4 | MIT | 영상 자막 가져오기 |
+| [Anthropic Python SDK](https://github.com/anthropics/anthropic-sdk-python) | 0.39.0 | MIT | Claude API 호출 |
+| [PyYAML](https://github.com/yaml/pyyaml) | 6.0.2 | MIT | `settings.yaml` 읽기·쓰기 |
+| [python-dotenv](https://github.com/theskumar/python-dotenv) | 1.0.1 | BSD-3-Clause | 예전 `.env` 설정을 `settings.yaml`로 옮길 때 사용 |
+| [SQLite](https://www.sqlite.org/) | Python 내장 | Public Domain | 게시 기록 저장 |
+| [im-not-ai](https://github.com/epoko77-ai/im-not-ai) (© 2026 epoko77-ai) | `vendor/im_not_ai/` 에 포함 | MIT | 댓글 심사·윤문 단계의 AI 말투 탐지 룰북(`quick-rules.md`)과 변경률 기준 |
 
-댓글 생성 파이프라인: 영상 분석 → 후보 생성 (3개) → 자동 심사·윤문 → 길이 맞춤
+im-not-ai는 원본 라이선스 전문을 [vendor/im_not_ai/LICENSE](vendor/im_not_ai/LICENSE)에 함께 두었습니다.
 
-### 브라우저 자동화
+## 외부 서비스 (API)
 
-| 기술 | 용도 | 라이선스 |
-|------|------|----------|
-| [Playwright](https://playwright.dev/) 1.49 | Chrome 프로필 기반 자동 로그인·댓글 게시 | Apache 2.0 |
+오픈소스가 아니라 키를 발급받아 호출하는 서비스입니다.
 
-### 데이터 & API
+| 서비스 | 용도 |
+|--------|------|
+| [YouTube Data API v3](https://developers.google.com/youtube/v3) | 영상 검색 · 상세 정보 · 인기 댓글 |
+| [Google Gemini API](https://ai.google.dev/) | 영상 분석 · 심사 · 댓글 작성 (작성 단계는 Gemini 먼저) |
+| [Anthropic Claude API](https://docs.anthropic.com/) | 영상 분석 · 심사 · 댓글 작성 |
+| [OpenRouter](https://openrouter.ai/) (무료 모델만) | 영상 분석 · 심사 · 댓글 작성 |
+| [OpenAI API](https://platform.openai.com/) | 영상 분석 · 심사 · 댓글 작성 |
 
-| 기술 | 용도 | 라이선스 |
-|------|------|----------|
-| [YouTube Data API v3](https://developers.google.com/youtube/v3) | 영상 검색·상세 정보·인기 댓글 조회 | Google ToS |
-| [youtube-transcript-api](https://github.com/jdepoix/youtube-transcript-api) 1.2 | 영상 자막 추출 | MIT |
-| [SQLite](https://www.sqlite.org/) | 댓글 게시 기록 저장 | Public Domain |
-
-### 설정 & 유틸리티
-
-| 기술 | 용도 | 라이선스 |
-|------|------|----------|
-| [PyYAML](https://pyyaml.org/) 6.0 | `settings.yaml` 설정 파일 관리 | MIT |
-| [python-dotenv](https://github.com/theskumar/python-dotenv) 1.0 | 환경 변수 로드 (레거시 호환) | BSD-3-Clause |
-| [google-api-python-client](https://github.com/googleapis/google-api-python-client) 2.154 | YouTube Data API 클라이언트 | Apache 2.0 |
-
-### 오픈소스 사용
-
-| 패키지 | 출처 | 라이선스 | 용도 |
-|--------|------|----------|------|
-| im_not_ai (© 2026 epoko77-ai) | `vendor/im_not_ai/` | MIT | 댓글 윤문 단계에서 AI 말투 탐지 룰북(`quick-rules.md`) 참조 |
+키가 있는 서비스 하나만 있어도 동작합니다.
 
 ### MCP (Model Context Protocol)
 
@@ -131,7 +123,7 @@ streamlit run app.py
 ├── requirements.txt
 ├── settings.example.yaml     # 설정 견본 (API 키 제외)
 ├── vendor/
-│   └── im_not_ai/            # AI 텍스트 자연스러움 룰북 (MIT)
+│   └── im_not_ai/            # im-not-ai 룰북 + 라이선스 (MIT)
 └── data/
     └── comments.db           # SQLite DB (자동 생성)
 ```
