@@ -138,36 +138,34 @@ st.markdown("""
         flex: 0 0 6.5rem !important;
     }
 
-    /* ── Search box: pill with the brand mark, a divider, and a search icon ── */
+    /* ── Search box: pill with a label, a divider, and a search icon ──
+       All three sit in the box's own flex row, centered together, instead of being
+       pinned with top:50% + translate, which rounds to a different pixel than the text
+       under display scaling. */
     .st-key-keyword_input [data-baseweb="input"] {
-        position: relative;
         min-height: 52px;
+        align-items: center;
         border-radius: 9999px !important;
-        padding-left: 5.1rem;
-        padding-right: 2.8rem;
+        padding-inline: 1.25rem 1.1rem;
         box-shadow: 0 3px 12px rgba(138, 124, 240, 0.1);
     }
     .st-key-keyword_input [data-baseweb="input"]::before {
         content: "키워드";
-        position: absolute;
-        left: 1.25rem;
-        top: 50%;
-        transform: translateY(-50%);
+        flex: none;
+        padding-right: 0.85rem;
         font-size: 0.92rem;
         font-weight: 700;
-        line-height: 1;
+        line-height: 22px;
         letter-spacing: -0.01em;
         color: var(--accent-text);
         pointer-events: none;
     }
     .st-key-keyword_input [data-baseweb="input"]::after {
         content: "";
-        position: absolute;
-        right: 1.1rem;
-        top: 50%;
+        flex: none;
         width: 20px;
         height: 20px;
-        transform: translateY(-50%);
+        margin-left: 0.6rem;
         background: var(--accent-text);
         -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") center / contain no-repeat;
         mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") center / contain no-repeat;
@@ -175,14 +173,18 @@ st.markdown("""
     }
     /* The divider between the mark and the text */
     .st-key-keyword_input [data-baseweb="input"] > div:first-child {
+        align-self: center;
+        height: 22px;
         border-left: 1.5px solid var(--border-strong) !important;
         border-radius: 0 !important;
-        margin-block: 14px;
     }
     .st-key-keyword_input input {
+        height: 22px;
+        padding-block: 0 !important;
         padding-left: 0.85rem !important;
         font-size: 1rem !important;
         font-weight: 500;
+        line-height: 22px !important;
     }
     .st-key-keyword_input input::placeholder {
         color: var(--text-secondary);
