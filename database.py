@@ -36,6 +36,15 @@ def can_post(video_id: str) -> tuple[bool, str]:
     return True, ""
 
 
+def get_posted_video_ids() -> set[str]:
+    conn = _get_conn()
+    rows = conn.execute(
+        "SELECT DISTINCT video_id FROM comments WHERE success = 1"
+    ).fetchall()
+    conn.close()
+    return {r["video_id"] for r in rows}
+
+
 def today_count() -> int:
     conn = _get_conn()
     row = conn.execute(
@@ -61,5 +70,20 @@ def get_history(limit=100):
     rows = conn.execute(
         "SELECT * FROM comments ORDER BY created_at DESC LIMIT ?", (limit,)
     ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_history_by_date(target_date=None, limit=100):
+    conn = _get_conn()
+    if target_date:
+        rows = conn.execute(
+            "SELECT * FROM comments WHERE date(created_at) = ? ORDER BY created_at DESC LIMIT ?",
+            (target_date.isoformat(), limit),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM comments ORDER BY created_at DESC LIMIT ?", (limit,)
+        ).fetchall()
     conn.close()
     return [dict(r) for r in rows]

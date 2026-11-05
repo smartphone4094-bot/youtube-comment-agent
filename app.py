@@ -1,5 +1,12 @@
 """YouTube Comment Agent Dashboard - Main Streamlit application (step-based wizard)."""
 
+import html
+import math
+import re
+import sys
+from datetime import date, timedelta
+from urllib.parse import quote
+
 import streamlit as st
 
 import ai_comment
@@ -13,135 +20,255 @@ import youtube_api
 # Page config
 # ---------------------------------------------------------------------------
 st.set_page_config(
-    page_title="YouTube Comment Agent",
+    page_title="마케팅AI 에이전트",
     page_icon="💬",
     layout="wide",
-    initial_sidebar_state="auto",
+    initial_sidebar_state="collapsed",
 )
+
+if "--ui-dev" in sys.argv:
+    import dev_fixtures
+
+    _fixture_mode = st.query_params.get("data")
+    if _fixture_mode in dev_fixtures.MODES:
+        ai_comment, browser_automation, config, database, youtube_api = dev_fixtures.activate(
+            _fixture_mode, ai_comment, browser_automation, config, database, youtube_api
+        )
+    dev_fixtures.render_toggle(_fixture_mode)
 
 # ---------------------------------------------------------------------------
 # Custom CSS
 # ---------------------------------------------------------------------------
 st.markdown("""
 <style>
-    /* Tighten top padding */
-    .block-container {
-        padding-top: 1.5rem;
+    /* Colors derive from the inherited text color, so they hold in any Streamlit theme. */
+    :root {
+        --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+        --text-secondary: color-mix(in srgb, currentColor 62%, transparent);
+        --hairline: rgba(128, 128, 128, 0.22);
+        --fill: rgba(128, 128, 128, 0.12);
+        --font-system: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI",
+            "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
     }
 
-    /* Video card styling */
-    .video-card {
-        border: 1px solid #e0e0e0;
-        border-radius: 8px;
-        padding: 10px;
-        margin-bottom: 8px;
-        background-color: #fafafa;
-        transition: box-shadow 0.2s;
+    /* ── Page chrome ── */
+    .stDeployButton,
+    [data-testid="stToolbar"],
+    [data-testid="stHeaderActionElements"] {
+        display: none !important;
     }
-    .video-card:hover {
-        box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    [data-testid="stHeader"] {
+        background: transparent !important;
+        pointer-events: none;
     }
-    [data-testid="stAppViewContainer"][data-theme="dark"] .video-card,
-    .stApp[data-theme="dark"] .video-card {
-        border-color: #444;
-        background-color: #262730;
+    [data-testid="stMainBlockContainer"] {
+        max-width: 980px;
+        margin-inline: auto;
+        padding-top: 2.5rem !important;
     }
 
+    /* ── Typography: tracking and leading follow size ── */
+    .stApp, .stApp *:not([data-testid="stIconMaterial"]):not(code):not(pre):not(.log-line):not(.log-line *) {
+        font-family: var(--font-system) !important;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+    .stApp h1 {
+        font-size: clamp(1.75rem, 5vw, 2.5rem) !important;
+        font-weight: 700 !important;
+        line-height: 1.1 !important;
+        letter-spacing: -0.02em;
+        word-break: keep-all;
+        overflow-wrap: anywhere;
+    }
+    .stApp h2, .stApp h3 {
+        line-height: 1.25 !important;
+        letter-spacing: -0.015em;
+        word-break: keep-all;
+    }
+    [data-testid="stMarkdownContainer"] {
+        word-break: keep-all;
+        overflow-wrap: anywhere;
+    }
+
+    /* ── Buttons: feedback lands on press, release settles ── */
+    .stButton button,
+    [data-testid="stPopover"] button {
+        border-radius: 10px !important;
+        font-weight: 500 !important;
+        transition: transform 160ms var(--ease-out), background-color 150ms ease,
+            border-color 150ms ease, color 150ms ease, box-shadow 150ms ease !important;
+    }
+    .stButton button:active:not(:disabled),
+    [data-testid="stPopover"] button:active:not(:disabled) {
+        transform: scale(0.97);
+        transition-duration: 60ms !important;
+    }
+
+    /* ── Inputs ── */
+    [data-baseweb="input"],
+    [data-baseweb="textarea"],
+    [data-baseweb="select"] > div {
+        border-radius: 10px !important;
+    }
+    [data-baseweb="input"]:focus-within,
+    [data-baseweb="textarea"]:focus-within {
+        box-shadow: 0 0 0 3px rgba(255, 75, 75, 0.16);
+        transition: box-shadow 150ms ease;
+    }
+
+    hr {
+        margin: 1rem 0 !important;
+        border-color: var(--hairline) !important;
+    }
+    .stExpander details {
+        border-radius: 12px !important;
+        border-color: var(--hairline) !important;
+    }
+    [data-testid="stAlert"] > div {
+        border-radius: 12px;
+    }
+
+    /* ── Video rows ── */
+    .thumb {
+        position: relative;
+        aspect-ratio: 16 / 9;
+        border-radius: 12px;
+        overflow: hidden;
+        background: var(--fill);
+    }
+    .thumb::before {
+        content: "▶";
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+        color: var(--text-secondary);
+    }
+    .bg-image {
+        position: absolute;
+        inset: 0;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-size: cover;
+    }
     .video-title {
-        font-size: 0.9rem;
+        font-size: 0.95rem;
         font-weight: 600;
-        line-height: 1.3;
-        margin-bottom: 2px;
+        line-height: 1.35;
+        margin-bottom: 4px;
         display: -webkit-box;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
         overflow: hidden;
     }
+    .video-title.full {
+        font-size: 1.05rem;
+        display: block;
+    }
     .video-meta {
-        font-size: 0.78rem;
-        color: #666;
-        margin-bottom: 0;
+        font-size: 0.8rem;
+        line-height: 1.5;
+        color: var(--text-secondary);
+        margin-bottom: 0.5rem;
+        font-variant-numeric: tabular-nums;
     }
-
-    /* Status badge */
-    .status-badge {
-        display: inline-block;
-        padding: 4px 12px;
-        border-radius: 16px;
+    .video-posted {
         font-size: 0.85rem;
-        font-weight: 500;
-    }
-    .status-ok {
-        background-color: #d4edda;
-        color: #155724;
-    }
-    .status-warn {
-        background-color: #fff3cd;
-        color: #856404;
-    }
-    .status-full {
-        background-color: #f8d7da;
-        color: #721c24;
+        color: var(--text-secondary);
     }
 
-    /* Step indicator */
+    /* ── Status badge ── */
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 5px 14px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+    }
+    .status-ok { background-color: #d4edda; color: #155724; }
+    .status-warn { background-color: #fff3cd; color: #856404; }
+    .status-full { background-color: #f8d7da; color: #721c24; }
+    [data-testid="stHorizontalBlock"]:has(.status-badge) {
+        flex-wrap: nowrap !important;
+        align-items: center;
+    }
+    [data-testid="stHorizontalBlock"]:has(.status-badge) > [data-testid="stColumn"] {
+        min-width: 0 !important;
+        width: auto !important;
+        flex: 1 1 0 !important;
+    }
+    [data-testid="stHorizontalBlock"]:has(.status-badge) > [data-testid="stColumn"]:last-child {
+        flex: 0 0 auto !important;
+    }
+    [data-testid="stPopover"] button,
+    [data-testid="stPopover"] button * {
+        white-space: nowrap;
+    }
+
+    /* ── Step indicator: a translucent layer content scrolls beneath ── */
+    [data-testid="stElementContainer"]:has(.step-bar) {
+        position: sticky;
+        top: 0.75rem;
+        z-index: 30;
+        pointer-events: none;
+    }
     .step-bar {
         display: flex;
+        width: fit-content;
+        max-width: 100%;
         align-items: center;
-        justify-content: center;
-        gap: 0;
-        margin: 0.5rem 0 1.2rem 0;
-        padding: 0.8rem 1rem;
-        background: #f8f9fa;
+        gap: 2px;
+        margin: 0.25rem auto 0.5rem;
+        padding: 3px;
+        background: color-mix(in srgb, Canvas 72%, transparent);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+        backdrop-filter: blur(20px) saturate(180%);
         border-radius: 12px;
-        border: 1px solid #e9ecef;
-    }
-    .stApp[data-theme="dark"] .step-bar,
-    [data-testid="stAppViewContainer"][data-theme="dark"] .step-bar {
-        background: #1e1e2e;
-        border-color: #333;
+        box-shadow: 0 0 0 1px var(--hairline), 0 4px 14px rgba(0, 0, 0, 0.08);
     }
     .step-item {
         display: flex;
         align-items: center;
-        gap: 8px;
-        padding: 8px 18px;
-        border-radius: 8px;
-        font-size: 0.95rem;
+        gap: 6px;
+        padding: 6px 14px;
+        border-radius: 9px;
+        font-size: 0.82rem;
         font-weight: 500;
-        color: #999;
-        transition: all 0.2s;
         white-space: nowrap;
+        transition: background-color 200ms var(--ease-out), color 200ms var(--ease-out);
     }
     .step-item.active {
         background: #4A90D9;
         color: #fff;
-        box-shadow: 0 2px 8px rgba(74,144,217,0.3);
+        box-shadow: 0 1px 4px rgba(74, 144, 217, 0.3);
     }
     .step-item.completed {
         color: #28a745;
-        font-weight: 600;
     }
-    .step-arrow {
-        font-size: 1.1rem;
-        color: #ccc;
-        margin: 0 6px;
-    }
-    .stApp[data-theme="dark"] .step-arrow {
-        color: #555;
+    .step-connector {
+        width: 14px;
+        height: 1px;
+        background: var(--hairline);
+        flex-shrink: 0;
     }
     .step-num {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 26px;
-        height: 26px;
+        width: 20px;
+        height: 20px;
         border-radius: 50%;
-        font-size: 0.82rem;
-        font-weight: 700;
-        border: 2px solid #ccc;
-        color: #999;
+        font-size: 0.72rem;
+        font-weight: 600;
+        border: 1.5px solid var(--hairline);
         flex-shrink: 0;
+        font-variant-numeric: tabular-nums;
     }
     .step-item.active .step-num {
         background: #fff;
@@ -153,38 +280,254 @@ st.markdown("""
         color: #fff;
         border-color: #28a745;
     }
+    @media (max-width: 480px) {
+        .step-item { padding: 6px 8px; }
+        .step-item:not(.active) .step-label { display: none; }
+    }
 
-    /* Selected video summary card */
-    .selected-video-card {
-        display: flex;
-        align-items: center;
-        gap: 16px;
-        padding: 12px 16px;
-        background: #f0f7ff;
-        border: 1px solid #b8d4f0;
-        border-radius: 10px;
-        margin-bottom: 1rem;
+    /* ── Profile popover: its transform is the position, so it must not be animated ── */
+    [data-testid="stPopover"] button {
+        border-radius: 20px !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     }
-    .stApp[data-theme="dark"] .selected-video-card,
-    [data-testid="stAppViewContainer"][data-theme="dark"] .selected-video-card {
-        background: #1a2a3d;
-        border-color: #2a4a6d;
+    [data-testid="stPopoverBody"] {
+        width: min(420px, calc(100vw - 24px)) !important;
+        min-width: 0 !important;
+        max-width: calc(100vw - 24px) !important;
+        border-radius: 14px !important;
+        box-shadow: 0 10px 38px rgba(0, 0, 0, 0.14), 0 4px 12px rgba(0, 0, 0, 0.08) !important;
     }
-    .selected-video-card img {
-        width: 120px;
-        border-radius: 6px;
-    }
-    .selected-video-info {
-        flex: 1;
-    }
-    .selected-video-info .title {
+    .profile-popover-header {
+        font-size: 0.95rem;
         font-weight: 600;
-        font-size: 1rem;
         margin-bottom: 2px;
     }
-    .selected-video-info .meta {
-        font-size: 0.82rem;
-        color: #888;
+    .profile-popover-hint {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        margin-bottom: 12px;
+        line-height: 1.55;
+    }
+    .profile-item-divider {
+        border: none;
+        border-top: 1px solid var(--hairline);
+        margin: 10px 0 8px 0 !important;
+    }
+    .profile-empty-state {
+        text-align: center;
+        padding: 20px 8px;
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+    }
+    [data-testid="stHorizontalBlock"]:has(.profile-account-card) {
+        flex-wrap: nowrap !important;
+        align-items: center;
+    }
+    [data-testid="stHorizontalBlock"]:has(.profile-account-card) > [data-testid="stColumn"] {
+        min-width: 0 !important;
+        width: auto !important;
+        flex: 1 1 0 !important;
+    }
+    [data-testid="stHorizontalBlock"]:has(.profile-account-card) > [data-testid="stColumn"]:last-child {
+        flex: 0 0 2.75rem !important;
+    }
+    .profile-account-card {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px;
+        border-radius: 10px;
+        transition: background-color 150ms ease;
+    }
+    @media (hover: hover) and (pointer: fine) {
+        .profile-account-card:hover {
+            background: var(--fill);
+        }
+    }
+    .profile-avatar {
+        position: relative;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+        font-weight: 600;
+        color: #fff;
+        flex-shrink: 0;
+    }
+    .profile-avatar.color-1 { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .profile-avatar.color-2 { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+    .profile-avatar.color-3 { background: linear-gradient(135deg, #4facfe 0%, #00a8e8 100%); }
+    .profile-avatar.color-4 { background: linear-gradient(135deg, #2bb673 0%, #1fa2a2 100%); }
+    .profile-avatar.color-5 { background: linear-gradient(135deg, #fa709a 0%, #f5a623 100%); }
+    .profile-account-info {
+        flex: 1;
+        min-width: 0;
+    }
+    .profile-account-name,
+    .profile-account-email,
+    .profile-account-path {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .profile-account-name {
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+    .profile-account-email {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+    }
+    .profile-account-path {
+        font-size: 0.72rem;
+        color: var(--text-secondary);
+    }
+
+    /* ── Pagination ── */
+    [data-testid="stHorizontalBlock"]:has(.pagination-info) {
+        flex-wrap: nowrap !important;
+        align-items: center;
+    }
+    [data-testid="stHorizontalBlock"]:has(.pagination-info) > [data-testid="stColumn"] {
+        min-width: 0 !important;
+        width: auto !important;
+        flex: 1 1 0 !important;
+    }
+    .pagination-info {
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: var(--text-secondary);
+        text-align: center;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* ── Dialogs: dim to focus, surface materializes ── */
+    [data-testid="stDialog"] {
+        background: transparent !important;
+        -webkit-backdrop-filter: blur(6px) saturate(140%);
+        backdrop-filter: blur(6px) saturate(140%);
+    }
+    [data-testid="stDialog"] > div {
+        background: rgba(0, 0, 0, 0.38) !important;
+    }
+    [data-testid="stDialog"] [role="dialog"] {
+        border-radius: 18px;
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28), 0 6px 18px rgba(0, 0, 0, 0.12);
+        animation: surface-in 220ms var(--ease-out);
+    }
+    [role="dialog"] [data-testid="stVerticalBlock"] {
+        width: 100% !important;
+    }
+    [role="dialog"] [data-testid="stHorizontalBlock"]:has(.stDateInput) {
+        flex-wrap: nowrap !important;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    [role="dialog"] [data-testid="stHorizontalBlock"]:has(.stDateInput) > [data-testid="stColumn"] {
+        min-width: 0 !important;
+        width: auto !important;
+        flex: 0 0 3rem !important;
+    }
+    [role="dialog"] [data-testid="stHorizontalBlock"]:has(.stDateInput) > [data-testid="stColumn"]:nth-child(2) {
+        flex: 1 1 0 !important;
+    }
+    .dialog-count {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        font-variant-numeric: tabular-nums;
+    }
+    .record {
+        padding: 12px 0;
+        border-bottom: 1px solid var(--hairline);
+    }
+    .record:last-child {
+        border-bottom: none;
+    }
+    .record-title {
+        display: flex;
+        gap: 6px;
+        font-size: 0.92rem;
+        font-weight: 600;
+        line-height: 1.35;
+    }
+    .record-meta {
+        font-size: 0.78rem;
+        color: var(--text-secondary);
+        margin: 2px 0 4px;
+        font-variant-numeric: tabular-nums;
+    }
+    .record-comment {
+        font-size: 0.875rem;
+        line-height: 1.5;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    .record-error {
+        font-size: 0.8rem;
+        line-height: 1.5;
+        color: #dc3545;
+        margin-top: 4px;
+    }
+    .log-line {
+        font-family: ui-monospace, SFMono-Regular, Consolas, "Malgun Gothic", monospace;
+        font-size: 0.78rem;
+        line-height: 1.55;
+        padding: 10px 0;
+        word-break: normal;
+        overflow-wrap: anywhere;
+        border-bottom: 1px solid var(--hairline);
+    }
+    .log-line:last-child {
+        border-bottom: none;
+    }
+
+    @keyframes surface-in {
+        from { opacity: 0; transform: scale(0.97); }
+        to { opacity: 1; transform: scale(1); }
+    }
+    @keyframes surface-fade {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    /* ── Accessibility preferences ── */
+    @media (prefers-reduced-motion: reduce) {
+        .stButton button:active:not(:disabled),
+        [data-testid="stPopover"] button:active:not(:disabled) {
+            transform: none;
+        }
+        [data-testid="stDialog"] [role="dialog"] {
+            animation: surface-fade 150ms ease;
+        }
+    }
+    @media (prefers-reduced-transparency: reduce) {
+        .step-bar,
+        [data-testid="stDialog"] {
+            -webkit-backdrop-filter: none;
+            backdrop-filter: none;
+        }
+        .step-bar {
+            background: Canvas;
+        }
+        [data-testid="stDialog"] > div {
+            background: rgba(0, 0, 0, 0.6) !important;
+        }
+    }
+    @media (prefers-contrast: more) {
+        :root {
+            --text-secondary: currentColor;
+            --hairline: currentColor;
+        }
+        .step-bar {
+            border: 1px solid currentColor;
+        }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -204,6 +547,15 @@ defaults = {
     "edited_comment": "",
     "posting_status": None,
     "post_result": None,
+    # Pagination state
+    "search_current_page": 1,
+    "search_page_tokens": {},      # {page_number: nextPageToken}
+    "search_pages_cache": {},      # {page_number: list[dict]}
+    "search_total_results": 0,
+    "search_has_more": False,
+    "search_mode": "",             # "search" or "trending"
+    # Profile add form state
+    "show_add_profile_form": False,
 }
 for key, val in defaults.items():
     if key not in st.session_state:
@@ -219,87 +571,43 @@ def go_to_step(step: int):
 
 
 # ---------------------------------------------------------------------------
-# Sidebar: Chrome profile management
+# Helpers: rendering untrusted text
 # ---------------------------------------------------------------------------
-with st.sidebar:
-    st.header("Chrome 프로필 관리")
-    st.caption("댓글 게시에 사용할 Chrome 프로필 경로를 등록하세요.")
-    st.markdown("**chrome://version** 에서 '프로필 경로'를 확인할 수 있습니다.")
-    st.markdown("---")
+def _clean(text) -> str:
+    """Single-line HTML-safe text. search.list titles arrive entity-encoded, videos.list titles don't."""
+    return html.escape(" ".join(html.unescape(str(text or "")).split()))
 
-    if "profiles_list" not in st.session_state:
-        st.session_state.profiles_list = config.load_profiles()
 
-    profiles_list = st.session_state.profiles_list
+def _plain_md(text) -> str:
+    """Escape Markdown, LaTeX ($) and Streamlit directives so data renders literally."""
+    return re.sub(r"([\\`*_{}\[\]()#+\-.!$:~<>|])", r"\\\1", str(text or ""))
 
-    # Display existing profiles
-    for i, profile in enumerate(profiles_list):
-        col_name, col_del = st.columns([4, 1])
-        with col_name:
-            st.text_input(
-                f"프로필 {i + 1} 이름",
-                value=profile.get("name", ""),
-                key=f"pname_{i}",
-                label_visibility="collapsed",
-                placeholder="프로필 이름",
-                on_change=lambda idx=i: profiles_list.__setitem__(
-                    idx,
-                    {
-                        **profiles_list[idx],
-                        "name": st.session_state[f"pname_{idx}"],
-                    },
-                ),
-            )
-        with col_del:
-            if st.button("🗑", key=f"pdel_{i}", help="프로필 삭제"):
-                profiles_list.pop(i)
-                config.save_profiles(profiles_list)
-                st.session_state.profiles_list = profiles_list
-                st.rerun()
 
-        st.text_input(
-            f"프로필 {i + 1} 경로",
-            value=profile.get("path", ""),
-            key=f"ppath_{i}",
-            label_visibility="collapsed",
-            placeholder="C:/Users/.../Chrome/User Data/Profile 1",
-            on_change=lambda idx=i: profiles_list.__setitem__(
-                idx,
-                {
-                    **profiles_list[idx],
-                    "path": st.session_state[f"ppath_{idx}"],
-                },
-            ),
-        )
-        if i < len(profiles_list) - 1:
-            st.markdown("---")
+def _background_image(url) -> str:
+    # A CSS background shows nothing when the URL fails; <img> would paint a broken-image icon.
+    safe_url = quote(html.unescape(url or ""), safe=":/?&=%#~@+,;")
+    return f'<div class="bg-image" style="background-image:url(&quot;{safe_url}&quot;)"></div>' if url else ""
 
-    st.markdown("")
 
-    # Add new profile
-    if st.button("+ 프로필 추가", use_container_width=True):
-        n = len(profiles_list) + 1
-        profiles_list.append({"name": f"유튜브{n}", "path": ""})
-        st.session_state.profiles_list = profiles_list
-        st.rerun()
+def _thumb_html(url) -> str:
+    return f'<div class="thumb">{_background_image(url)}</div>'
 
-    # Save button
-    if st.button("💾 프로필 저장", use_container_width=True, type="primary"):
-        valid = [p for p in profiles_list if p.get("path", "").strip()]
-        config.save_profiles(valid)
-        st.session_state.profiles_list = valid
-        config.CHROME_PROFILES = [p["path"] for p in valid]
-        st.toast(f"{len(valid)}개 프로필이 저장되었습니다.")
-        st.rerun()
 
-    if not profiles_list:
-        st.info("등록된 프로필이 없습니다. 프로필을 추가해주세요.")
+def _video_meta(*parts) -> str:
+    return " &middot; ".join(p for p in parts if p)
 
 
 # ---------------------------------------------------------------------------
-# Header
+# Initialize Chrome profiles & Header with profile popover
 # ---------------------------------------------------------------------------
-st.title("YouTube Comment Agent Dashboard")
+if "profiles_list" not in st.session_state:
+    st.session_state.profiles_list = config.load_profiles()
+
+st.title("마케팅AI 에이전트 (운명원)")
+
+# Profile popover placed next to the daily comment badge below the title
+_profiles_list = st.session_state.profiles_list
+_profile_count = len(_profiles_list)
 
 # Today's comment count / daily limit
 posted_today = database.today_count()
@@ -316,10 +624,207 @@ else:
     badge_class = "status-ok"
     badge_text = f"오늘 댓글 {posted_today}/{daily_max} (잔여 {remaining}개)"
 
-st.markdown(
-    f'<span class="status-badge {badge_class}">{badge_text}</span>',
-    unsafe_allow_html=True,
-)
+_badge_col, _profile_col = st.columns([6, 1])
+with _badge_col:
+    st.markdown(
+        f'<span class="status-badge {badge_class}">{badge_text}</span>',
+        unsafe_allow_html=True,
+    )
+with _profile_col:
+    profiles_list = _profiles_list
+    with st.popover(f"👤 {_profile_count}", use_container_width=True):
+        st.markdown(
+            '<div class="profile-popover-header">Google 계정 관리</div>'
+            '<div class="profile-popover-hint">'
+            '댓글 게시에 사용할 Google 계정을 연결하세요.<br>'
+            'Chrome 프로필 경로를 자동으로 감지하거나 직접 입력할 수 있습니다.'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
+        # --- Connected accounts list ---
+        if not profiles_list:
+            st.markdown(
+                '<div class="profile-empty-state">'
+                '연결된 계정이 없습니다.<br>'
+                '아래 버튼으로 Google 계정을 연결해주세요.'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            for i, profile in enumerate(profiles_list):
+                p_path = profile.get("path", "")
+
+                # Enrich with live Chrome Preferences data when path exists
+                chrome_info = config.read_chrome_profile_info(p_path)
+                p_name = (chrome_info["name"] or profile.get("name", "")).strip()
+                p_email = (chrome_info["email"] or profile.get("email", "")).strip()
+                p_picture = chrome_info["picture"] or profile.get("picture", "")
+
+                primary = p_name or p_email or "이름 없음"
+                secondary = p_email if p_name else ""
+                avatar_letter = html.escape(primary[0].upper())
+                color_class = f"color-{(i % 5) + 1}"
+                # The letter sits beneath the image, so a broken picture falls back to it.
+                avatar_html = (
+                    f'<div class="profile-avatar {color_class}">'
+                    f'{avatar_letter}{_background_image(p_picture)}</div>'
+                )
+
+                email_line = (
+                    f'<div class="profile-account-email" title="{_clean(secondary)}">'
+                    f'<bdi>{_clean(secondary)}</bdi></div>'
+                    if secondary else ""
+                )
+                path_short = p_path.replace("\\", "/").rstrip("/").split("/")[-1] if p_path else ""
+                path_line = (
+                    f'<div class="profile-account-path">{_clean(path_short)}</div>'
+                    if path_short else ""
+                )
+
+                card_col, del_col = st.columns([6, 1])
+                with card_col:
+                    st.markdown(
+                        f'<div class="profile-account-card">'
+                        f'{avatar_html}'
+                        f'<div class="profile-account-info">'
+                        f'<div class="profile-account-name" title="{_clean(primary)}">'
+                        f'<bdi>{_clean(primary)}</bdi></div>'
+                        f'{email_line}{path_line}'
+                        f'</div></div>',
+                        unsafe_allow_html=True,
+                    )
+                with del_col:
+                    if st.button("✕", key=f"pdel_{i}", help="계정 연결 해제"):
+                        profiles_list.pop(i)
+                        config.save_profiles(profiles_list)
+                        st.session_state.profiles_list = profiles_list
+                        st.rerun()
+
+                if i < len(profiles_list) - 1:
+                    st.markdown(
+                        '<hr class="profile-item-divider">',
+                        unsafe_allow_html=True,
+                    )
+
+        st.markdown('<hr class="profile-item-divider">', unsafe_allow_html=True)
+
+        # --- Add account form ---
+        if st.session_state.get("show_add_profile_form"):
+            st.markdown(
+                '<div class="profile-popover-header" style="font-size:0.88rem;">'
+                'Google 계정 연결</div>',
+                unsafe_allow_html=True,
+            )
+
+            new_name = st.text_input(
+                "이름",
+                placeholder="Google 표시 이름",
+                key="new_profile_name",
+            )
+            new_email = st.text_input(
+                "이메일",
+                placeholder="example@gmail.com",
+                key="new_profile_email",
+            )
+
+            # Auto-detect Chrome path
+            auto_path = ""
+            if new_email:
+                auto_path = config.find_chrome_profile_by_email(new_email)
+
+            if auto_path:
+                st.markdown(
+                    f'<div style="font-size:0.78rem;color:#28a745;margin-bottom:4px;">'
+                    f'Chrome 프로필 자동 감지됨</div>',
+                    unsafe_allow_html=True,
+                )
+                new_path = st.text_input(
+                    "Chrome 프로필 경로",
+                    value=auto_path,
+                    key="new_profile_path",
+                    help="chrome://version 에서 확인 가능",
+                )
+            else:
+                # Try to suggest detected profiles
+                detected = config.detect_chrome_profiles()
+                detected_options = [
+                    f"{d['name']} ({d['email']})" if d.get('email')
+                    else d['name']
+                    for d in detected
+                ]
+                if detected_options:
+                    st.markdown(
+                        '<div style="font-size:0.78rem;color:#6b7280;margin-bottom:2px;">'
+                        '감지된 Chrome 프로필:</div>',
+                        unsafe_allow_html=True,
+                    )
+                    selected_detected = st.selectbox(
+                        "감지된 프로필",
+                        options=["직접 입력"] + detected_options,
+                        key="detected_profile_select",
+                        label_visibility="collapsed",
+                    )
+                    if selected_detected != "직접 입력":
+                        det_idx = detected_options.index(selected_detected)
+                        det = detected[det_idx]
+                        if not new_name:
+                            new_name = det.get("display", det.get("name", ""))
+                        if not new_email:
+                            new_email = det.get("email", "")
+                        auto_path = det.get("path", "")
+
+                new_path = st.text_input(
+                    "Chrome 프로필 경로",
+                    value=auto_path,
+                    placeholder="C:/Users/.../Chrome/User Data/Profile 1",
+                    key="new_profile_path",
+                    help="chrome://version 에서 확인 가능",
+                )
+
+            save_col, cancel_col = st.columns(2)
+            with save_col:
+                if st.button(
+                    "연결", use_container_width=True, type="primary",
+                    key="save_new_profile_btn",
+                ):
+                    if not new_path or not new_path.strip():
+                        st.error("Chrome 프로필 경로를 입력해주세요.")
+                    else:
+                        new_profile = {
+                            "name": new_name.strip() or "계정",
+                            "email": new_email.strip(),
+                            "picture": "",
+                            "path": new_path.strip(),
+                        }
+                        profiles_list.append(new_profile)
+                        config.save_profiles(profiles_list)
+                        st.session_state.profiles_list = profiles_list
+                        config.CHROME_PROFILES = [
+                            p["path"] for p in profiles_list if p.get("path")
+                        ]
+                        st.session_state.show_add_profile_form = False
+                        st.toast(
+                            f"'{new_profile['name']}' 계정이 연결되었습니다."
+                        )
+                        st.rerun()
+            with cancel_col:
+                if st.button(
+                    "취소", use_container_width=True,
+                    key="cancel_new_profile_btn",
+                ):
+                    st.session_state.show_add_profile_form = False
+                    st.rerun()
+        else:
+            if st.button(
+                "Google 계정 연결",
+                use_container_width=True,
+                type="primary",
+                key="add_profile_btn",
+                icon=":material/person_add:",
+            ):
+                st.session_state.show_add_profile_form = True
+                st.rerun()
 
 
 # ---------------------------------------------------------------------------
@@ -342,15 +847,28 @@ for i, label in enumerate(step_labels, start=1):
 
     step_html_parts.append(
         f'<div class="step-item {cls}">'
-        f'<span class="step-num">{num_inner}</span>{label}</div>'
+        f'<span class="step-num">{num_inner}</span>'
+        f'<span class="step-label">{label}</span></div>'
     )
     if i < len(step_labels):
-        step_html_parts.append('<span class="step-arrow">&#x279C;</span>')
+        step_html_parts.append('<span class="step-connector"></span>')
 
 st.markdown(
     '<div class="step-bar">' + "".join(step_html_parts) + "</div>",
     unsafe_allow_html=True,
 )
+
+
+# ---------------------------------------------------------------------------
+# Helper: reset pagination state for a fresh search
+# ---------------------------------------------------------------------------
+def _reset_pagination():
+    st.session_state.search_current_page = 1
+    st.session_state.search_page_tokens = {}
+    st.session_state.search_pages_cache = {}
+    st.session_state.search_total_results = 0
+    st.session_state.search_has_more = False
+    st.session_state.search_mode = ""
 
 
 # ===========================================================================
@@ -367,13 +885,9 @@ if current == 1:
         key="keyword_input",
     )
 
-    btn_search_col, btn_trending_col = st.columns(2)
-    with btn_search_col:
-        search_clicked = st.button(
-            "🔍 영상 불러오기", use_container_width=True, type="primary"
-        )
-    with btn_trending_col:
-        trending_clicked = st.button("🔥 뜨는 영상", use_container_width=True)
+    search_clicked = st.button(
+        "🔍 영상 불러오기", use_container_width=True, type="primary"
+    )
 
     if search_clicked:
         if not config.YOUTUBE_API_KEY:
@@ -382,38 +896,34 @@ if current == 1:
             st.warning("검색 키워드를 입력해주세요.")
         else:
             st.session_state.search_keyword = keyword.strip()
+            _reset_pagination()
             with st.spinner("영상을 검색하고 있습니다..."):
-                results = youtube_api.search_videos(
-                    keyword=keyword.strip(), max_results=20
-                )
-                if results:
-                    st.session_state.videos = results
-                    st.session_state.last_search = keyword.strip()
-                    st.toast(
-                        f"'{keyword.strip()}' 검색 결과 {len(results)}개를 불러왔습니다."
+                try:
+                    result = youtube_api.search_videos(
+                        keyword=keyword.strip(), max_results=10
                     )
-                else:
-                    st.session_state.videos = []
-                    st.warning("검색 결과가 없습니다. 다른 키워드를 시도해주세요.")
+                    videos_page = result.get("videos", [])
+                    next_token = result.get("nextPageToken")
 
-    if trending_clicked:
-        if not config.YOUTUBE_API_KEY:
-            st.error("YouTube API 키가 설정되지 않았습니다. .env 파일을 확인해주세요.")
-        else:
-            kw = keyword.strip() or "연애"
-            with st.spinner("뜨기 직전 영상을 찾고 있습니다..."):
-                results = youtube_api.search_trending_videos(
-                    keyword=kw, max_results=20
-                )
-                if results:
-                    st.session_state.videos = results
-                    st.session_state.last_search = f"🔥 {kw} (뜨는 영상)"
-                    st.toast(f"뜨기 직전 영상 {len(results)}개를 찾았습니다!")
-                else:
-                    st.session_state.videos = []
-                    st.warning(
-                        "조건에 맞는 뜨기 직전 영상이 없습니다. 일반 검색을 이용해주세요."
-                    )
+                    if videos_page:
+                        st.session_state.videos = videos_page
+                        st.session_state.search_pages_cache[1] = videos_page
+                        st.session_state.search_current_page = 1
+                        st.session_state.search_mode = "search"
+                        st.session_state.search_total_results = result.get("totalResults", 0)
+                        if next_token:
+                            st.session_state.search_page_tokens[2] = next_token
+                            st.session_state.search_has_more = True
+                        st.session_state.last_search = keyword.strip()
+                        st.toast(
+                            f"'{keyword.strip()}' 검색 결과 {len(videos_page)}개를 불러왔습니다."
+                        )
+                    else:
+                        st.session_state.videos = []
+                        st.warning("검색 결과가 없습니다. 다른 키워드를 시도해주세요.")
+                except Exception as e:
+                    config.log_error("search_videos", e, f"keyword={keyword.strip()}")
+                    st.error("검색 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.")
 
     # --- URL direct input ---
     st.markdown("")
@@ -432,37 +942,45 @@ if current == 1:
                 vid = youtube_api.extract_video_id(url_input.strip())
                 if not vid:
                     st.error("유효한 YouTube URL이 아닙니다.")
+                elif vid in database.get_posted_video_ids():
+                    st.error("이미 댓글을 게시한 영상이라 선택할 수 없습니다.")
                 else:
                     with st.spinner("영상 정보를 불러오는 중..."):
-                        details = youtube_api.get_video_details(vid)
-                        if details:
-                            st.session_state.selected_video = details
-                            st.session_state.ai_result = None
-                            st.session_state.confirmed_comment = None
-                            st.session_state.edited_comment = ""
-                            st.toast(
-                                f"'{details['title'][:30]}...' 영상을 선택했습니다."
-                            )
-                            go_to_step(2)
-                        else:
-                            st.error(
-                                "영상 정보를 불러올 수 없습니다. URL을 확인해주세요."
-                            )
+                        try:
+                            details = youtube_api.get_video_details(vid)
+                            if details:
+                                st.session_state.selected_video = details
+                                st.session_state.ai_result = None
+                                st.session_state.confirmed_comment = None
+                                st.session_state.edited_comment = ""
+                                go_to_step(2)
+                            else:
+                                st.error(
+                                    "영상 정보를 불러올 수 없습니다. URL을 확인해주세요."
+                                )
+                        except Exception as e:
+                            config.log_error("get_video_details", e, f"url={url_input}")
+                            st.error("영상 정보를 불러오는 중 오류가 발생했습니다.")
 
-    # --- Video list ---
+    # --- Video list with pagination ---
     st.markdown("")
-    videos = st.session_state.videos
+    cur_page = st.session_state.search_current_page
+    videos = st.session_state.search_pages_cache.get(cur_page, st.session_state.videos)
 
     if videos:
+        posted_ids = database.get_posted_video_ids()
+        total_cached = len(st.session_state.search_pages_cache)
+        has_more = st.session_state.search_has_more
         if st.session_state.last_search:
+            page_label = f" (페이지 {cur_page})" if total_cached > 1 or has_more else ""
             st.caption(
-                f"'{st.session_state.last_search}' 검색 결과 ({len(videos)}개)"
+                f"{_plain_md(st.session_state.last_search)} 검색 결과 ({len(videos)}개){page_label}"
             )
 
         for idx, video in enumerate(videos):
             published = youtube_api.format_publish_date(video.get("publishedAt", ""))
-            channel = video.get("channelTitle", "알 수 없음")
-            title = video.get("title", "제목 없음")
+            channel = _clean(video.get("channelTitle"))
+            title = _clean(video.get("title")) or "제목 없음"
             thumb = video.get("thumbnail", "")
 
             is_selected = (
@@ -474,42 +992,54 @@ if current == 1:
             with st.container():
                 c_img, c_info = st.columns([1, 3])
                 with c_img:
-                    if thumb:
-                        st.image(thumb, use_container_width=True)
+                    st.markdown(_thumb_html(thumb), unsafe_allow_html=True)
                 with c_info:
-                    vph = video.get("viewsPerHour")
-                    vph_badge = (
-                        f' <span style="background:#ff4444;color:#fff;padding:1px 6px;'
-                        f'border-radius:8px;font-size:0.72rem;">🔥 {vph}회/h</span>'
-                        if vph
-                        else ""
-                    )
                     views_text = (
-                        f" · 조회수 {youtube_api.format_view_count(video.get('viewCount', '0'))}"
+                        f"조회수 {youtube_api.format_view_count(video.get('viewCount', '0'))}"
                         if video.get("viewCount")
                         else ""
                     )
+                    meta = _video_meta(f"<bdi>{channel}</bdi>" if channel else "", published, views_text)
                     st.markdown(
-                        f'<div class="video-title">{title}{vph_badge}</div>'
-                        f'<p class="video-meta">{channel} &middot; {published}{views_text}</p>',
+                        f'<div class="video-title" title="{title}"><bdi>{title}</bdi></div>'
+                        f'<div class="video-meta">{meta}</div>',
                         unsafe_allow_html=True,
                     )
 
-                    if is_selected:
-                        st.success("선택됨", icon="✅")
+                    already_posted = video.get("videoId") in posted_ids
+                    if already_posted:
+                        st.markdown(
+                            '<div class="video-posted">✅ 댓글 게시 완료</div>',
+                            unsafe_allow_html=True,
+                        )
+                    elif is_selected:
+                        if st.button(
+                            "선택됨 · 이어서 진행",
+                            key=f"resume_{cur_page}_{idx}",
+                            use_container_width=True,
+                            type="primary",
+                        ):
+                            go_to_step(2)
                     else:
                         if st.button(
                             "선택",
-                            key=f"select_{idx}",
+                            key=f"select_{cur_page}_{idx}",
                             use_container_width=True,
                         ):
                             with st.spinner("상세 정보 로딩 중..."):
-                                details = youtube_api.get_video_details(
-                                    video["videoId"]
-                                )
-                                if details:
-                                    st.session_state.selected_video = details
-                                else:
+                                try:
+                                    details = youtube_api.get_video_details(
+                                        video["videoId"]
+                                    )
+                                    if details:
+                                        st.session_state.selected_video = details
+                                    else:
+                                        st.session_state.selected_video = video
+                                except Exception as e:
+                                    config.log_error(
+                                        "get_video_details", e,
+                                        f"videoId={video.get('videoId')}",
+                                    )
                                     st.session_state.selected_video = video
                                 # Reset downstream state when selecting a new video
                                 st.session_state.ai_result = None
@@ -518,7 +1048,81 @@ if current == 1:
                                 go_to_step(2)
 
                 st.divider()
-    else:
+
+        # --- Pagination controls ---
+        can_prev = cur_page > 1
+        can_next = (
+            st.session_state.search_has_more
+            and cur_page < 10  # Max 10 pages (100 results)
+        )
+        if can_prev or can_next:
+            pag_prev, pag_info, pag_next = st.columns([1, 2, 1])
+            with pag_prev:
+                if st.button(
+                    "← 이전",
+                    disabled=not can_prev,
+                    use_container_width=True,
+                    key="page_prev",
+                ):
+                    st.session_state.search_current_page = cur_page - 1
+                    prev_cached = st.session_state.search_pages_cache.get(cur_page - 1)
+                    if prev_cached:
+                        st.session_state.videos = prev_cached
+                    st.rerun()
+            with pag_info:
+                # totalResults is YouTube's estimate; the count corrects once the last page loads.
+                estimated_pages = min(10, math.ceil(st.session_state.search_total_results / 10))
+                max_page = max(estimated_pages, cur_page + 1) if has_more else total_cached
+                st.markdown(
+                    f'<div class="pagination-info">{cur_page} / {max_page}</div>',
+                    unsafe_allow_html=True,
+                )
+            with pag_next:
+                if st.button(
+                    "다음 →",
+                    disabled=not can_next,
+                    use_container_width=True,
+                    key="page_next",
+                ):
+                    next_page = cur_page + 1
+                    # Check cache first
+                    if next_page in st.session_state.search_pages_cache:
+                        st.session_state.search_current_page = next_page
+                        st.session_state.videos = st.session_state.search_pages_cache[next_page]
+                        st.rerun()
+                    else:
+                        # Fetch next page from YouTube API
+                        token = st.session_state.search_page_tokens.get(next_page)
+                        if token:
+                            with st.spinner("다음 페이지를 불러오는 중..."):
+                                try:
+                                    result = youtube_api.search_videos(
+                                        keyword=st.session_state.search_keyword,
+                                        max_results=10,
+                                        page_token=token,
+                                    )
+                                    new_videos = result.get("videos", [])
+                                    new_next_token = result.get("nextPageToken")
+                                    if new_videos:
+                                        st.session_state.search_pages_cache[next_page] = new_videos
+                                        st.session_state.search_current_page = next_page
+                                        st.session_state.videos = new_videos
+                                        if new_next_token and next_page < 10:
+                                            st.session_state.search_page_tokens[next_page + 1] = new_next_token
+                                            st.session_state.search_has_more = True
+                                        else:
+                                            st.session_state.search_has_more = False
+                                    else:
+                                        st.session_state.search_has_more = False
+                                        st.toast("더 이상 검색 결과가 없습니다.")
+                                except Exception as e:
+                                    config.log_error("search_videos_page", e, f"page={next_page}")
+                                    st.error("다음 페이지를 불러오는 중 오류가 발생했습니다.")
+                            st.rerun()
+                        else:
+                            st.session_state.search_has_more = False
+                            st.toast("더 이상 검색 결과가 없습니다.")
+    elif not search_clicked:
         st.info("키워드를 입력하고 '영상 불러오기' 버튼을 눌러주세요.")
 
 
@@ -542,18 +1146,25 @@ elif current == 2:
 
     # -- Selected video info (prominent) --
     thumb = sv.get("thumbnail", "")
-    v_title = sv.get("title", "제목 없음")
-    v_channel = sv.get("channelTitle", "알 수 없음")
+    v_title = _clean(sv.get("title")) or "제목 없음"
+    v_channel = _clean(sv.get("channelTitle"))
     v_views = youtube_api.format_view_count(sv.get("viewCount") or "0")
     v_comments = youtube_api.format_view_count(sv.get("commentCount") or "0")
 
     col_thumb, col_info = st.columns([1, 3])
     with col_thumb:
-        if thumb:
-            st.image(thumb, use_container_width=True)
+        st.markdown(_thumb_html(thumb), unsafe_allow_html=True)
     with col_info:
-        st.markdown(f"**{v_title}**")
-        st.caption(f"{v_channel} · 조회수 {v_views} · 댓글 {v_comments}")
+        v_meta = _video_meta(
+            f"<bdi>{v_channel}</bdi>" if v_channel else "",
+            f"조회수 {v_views}",
+            f"댓글 {v_comments}",
+        )
+        st.markdown(
+            f'<div class="video-title full"><bdi>{v_title}</bdi></div>'
+            f'<div class="video-meta">{v_meta}</div>',
+            unsafe_allow_html=True,
+        )
 
     st.markdown("---")
 
@@ -590,17 +1201,21 @@ elif current == 2:
                 st.session_state.confirmed_comment = None
                 st.rerun()
             except Exception as e:
-                st.error(f"댓글 생성 중 오류가 발생했습니다: {e}")
+                config.log_error(
+                    "generate_comment", e,
+                    f"videoId={video_id}",
+                )
+                st.error("댓글 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.")
 
     # -- Display AI results --
     if st.session_state.ai_result:
         ai = st.session_state.ai_result
 
         st.markdown("#### 🔍 영상 속 고민")
-        st.info(ai.get("concern", ""))
+        st.info(_plain_md(ai.get("concern", "")))
 
         if ai.get("warning"):
-            st.warning(ai["warning"])
+            st.warning(_plain_md(ai["warning"]))
 
         st.markdown("#### 💬 댓글 초안")
         edited = st.text_area(
@@ -630,13 +1245,13 @@ elif current == 2:
             )
 
         with st.expander("🧠 AI 분석 근거", expanded=False):
-            st.markdown(f"**분석 이유:** {ai.get('reasoning', '')}")
+            st.markdown(f"**분석 이유:** {_plain_md(ai.get('reasoning', ''))}")
             pop_comments = ai.get("_popular_comments", [])
             if pop_comments:
                 st.markdown("**참고한 인기 댓글:**")
                 for pc in pop_comments[:5]:
                     likes = pc.get("likeCount", 0)
-                    st.markdown(f"- 👍 {likes} | {pc.get('text', '')[:80]}")
+                    st.markdown(f"- 👍 {likes:,} | {_plain_md(pc.get('text', '')[:80])}")
 
     # -- Confirm logic --
     if confirm_clicked and st.session_state.ai_result:
@@ -674,8 +1289,11 @@ elif current == 3:
 
     # -- Show confirmed comment --
     st.markdown("#### 확정된 댓글")
-    st.info(st.session_state.confirmed_comment)
-    st.caption(f"대상 영상: {video_title}")
+    st.info(_plain_md(st.session_state.confirmed_comment))
+    st.markdown(
+        f'<div class="video-meta">대상 영상: <bdi>{_clean(video_title)}</bdi></div>',
+        unsafe_allow_html=True,
+    )
 
     st.markdown("---")
 
@@ -782,10 +1400,11 @@ elif current == 3:
                         success=False,
                         error=error_msg,
                     )
-                    st.error(f"게시 실패: {error_msg}")
+                    st.error(f"게시 실패: {_plain_md(error_msg)}")
 
             except Exception as e:
                 status_container.update(label="게시 실패", state="error")
+                config.log_error("post_comment", e, f"videoId={video_id}")
                 database.log_comment(
                     video_id=video_id,
                     video_title=video_title,
@@ -794,7 +1413,7 @@ elif current == 3:
                     success=False,
                     error=str(e),
                 )
-                st.error(f"게시 중 오류 발생: {e}")
+                st.error("게시 중 오류가 발생했습니다. 오류 로그를 확인해주세요.")
 
     # -- Show previous result / success state --
     if st.session_state.post_result and not st.session_state.confirmed_comment:
@@ -816,39 +1435,92 @@ elif current == 3:
                 go_to_step(1)
         else:
             st.error(
-                f"마지막 게시: 실패 - {st.session_state.post_result.get('error', '')}"
+                f"마지막 게시: 실패 - {_plain_md(st.session_state.post_result.get('error', ''))}"
             )
 
 
 # ===========================================================================
-# Posting history (always accessible at the bottom)
+# Posting history & error log (dialog modals with date navigation)
 # ===========================================================================
-st.markdown("---")
-with st.expander("📋 게시 기록", expanded=False):
-    history = database.get_history(limit=100)
-    if history:
-        for record in history:
-            r_title = record.get("video_title", "")[:25]
-            r_profile = f"유튜브{record.get('profile_index', 0) + 1}"
-            r_comment = record.get("comment", "")[:40]
-            r_success = "✅" if record.get("success") else "❌"
-            r_time = record.get("created_at", "")
-            r_error = record.get("error", "")
 
-            cols = st.columns([1, 4])
-            with cols[0]:
-                st.markdown(r_success)
-            with cols[1]:
-                st.markdown(
-                    f"**{r_title}{'...' if len(record.get('video_title', '')) > 25 else ''}**  \n"
-                    f"<span style='font-size:0.82rem; color:#888;'>"
-                    f"{r_profile} · {r_time}</span>  \n"
-                    f"<span style='font-size:0.85rem;'>"
-                    f"{r_comment}{'...' if len(record.get('comment', '')) > 40 else ''}</span>",
-                    unsafe_allow_html=True,
-                )
-                if r_error:
-                    st.caption(f"오류: {r_error}")
-            st.divider()
-    else:
-        st.caption("아직 게시 기록이 없습니다.")
+def _shift_date(date_key: str, days: int):
+    st.session_state[date_key] += timedelta(days=days)
+
+
+def _date_navigator(prefix: str) -> date:
+    """◀ date ▶ row. Callbacks keep the dialog open; st.rerun() here would close it."""
+    date_key = f"{prefix}_date"
+    today = date.today()
+    nav_prev, nav_date, nav_next = st.columns([1, 4, 1])
+    with nav_prev:
+        st.button(
+            "◀", key=f"{prefix}_prev", use_container_width=True, help="이전 날짜",
+            on_click=_shift_date, args=(date_key, -1),
+        )
+    with nav_date:
+        selected = st.date_input(
+            "날짜", key=date_key, max_value=today, label_visibility="collapsed"
+        )
+    with nav_next:
+        st.button(
+            "▶", key=f"{prefix}_next", use_container_width=True, help="다음 날짜",
+            disabled=selected >= today,
+            on_click=_shift_date, args=(date_key, 1),
+        )
+    return selected
+
+
+def _record_html(record: dict, profiles: list[dict]) -> str:
+    index = record.get("profile_index", 0)
+    profile_name = (
+        profiles[index].get("name", "") if 0 <= index < len(profiles) else ""
+    ).strip() or f"프로필 {index + 1}"
+    mark = "✅" if record.get("success") else "❌"
+    title = _clean(record.get("video_title")) or "제목 없음"
+    comment = _clean(record.get("comment"))
+    error = _clean(record.get("error"))
+    comment_html = f'<div class="record-comment" title="{comment}"><bdi>{comment}</bdi></div>' if comment else ""
+    error_html = f'<div class="record-error">오류: {error}</div>' if error else ""
+    return (
+        f'<div class="record"><div class="record-title"><span>{mark}</span><bdi>{title}</bdi></div>'
+        f'<div class="record-meta"><bdi>{_clean(profile_name)}</bdi> &middot; '
+        f'{_clean(record.get("created_at"))}</div>{comment_html}{error_html}</div>'
+    )
+
+
+def _dialog_rows(rows_html: list[str], unit: str, empty_message: str):
+    if not rows_html:
+        st.markdown(f'<div class="profile-empty-state">{empty_message}</div>', unsafe_allow_html=True)
+        return
+    st.markdown(f'<div class="dialog-count">{len(rows_html):,}{unit}</div>', unsafe_allow_html=True)
+    # Only the rows scroll, so the date row stays reachable.
+    with st.container(height=min(440, 90 + 110 * len(rows_html)), border=False):
+        st.markdown("".join(rows_html), unsafe_allow_html=True)
+
+
+@st.dialog("📋 게시 기록", width="large")
+def show_history_dialog():
+    selected = _date_navigator("hist")
+    profiles = config.load_profiles()
+    rows = [_record_html(r, profiles) for r in database.get_history_by_date(selected)]
+    _dialog_rows(rows, "건", "해당 날짜에 게시 기록이 없습니다.")
+
+
+@st.dialog("🔧 오류 로그", width="large")
+def show_error_log_dialog():
+    selected = _date_navigator("log")
+    lines = reversed(config.read_error_log_by_date(selected))
+    rows = [f'<div class="log-line"><bdi>{html.escape(line)}</bdi></div>' for line in lines]
+    _dialog_rows(rows, "건", "해당 날짜에 기록된 오류가 없습니다.")
+
+
+st.markdown("---")
+_hist_col, _log_col = st.columns(2)
+with _hist_col:
+    if st.button("📋 게시 기록", use_container_width=True, key="open_hist"):
+        st.session_state.hist_date = date.today()
+        show_history_dialog()
+with _log_col:
+    if st.button("🔧 오류 로그", use_container_width=True, key="open_log"):
+        st.session_state.log_date = date.today()
+        show_error_log_dialog()

@@ -14,49 +14,63 @@ def _get_service():
     return build("youtube", "v3", developerKey=config.YOUTUBE_API_KEY)
 
 
-def search_videos(keyword: str = "연애", max_results: int = 20) -> list[dict]:
-    """Search YouTube videos by keyword.
+def search_videos(
+    keyword: str = "연애",
+    max_results: int = 10,
+    page_token: str | None = None,
+) -> dict:
+    """Search YouTube videos by keyword with pagination support.
 
-    Returns a list of dicts with keys:
-        videoId, title, channelTitle, publishedAt, thumbnail, description
+    Args:
+        keyword: Search query string.
+        max_results: Number of results per page (default 10, max 50).
+        page_token: Token for fetching the next page of results.
+
+    Returns a dict with keys:
+        videos        - list[dict] with videoId, title, channelTitle, etc.
+        nextPageToken - str or None; pass to the next call for more results.
+        totalResults  - YouTube's estimate of the total result count.
+
+    Raises on API failure so the caller can log it and tell the user.
     """
-    try:
-        service = _get_service()
-        response = service.search().list(
-            q=keyword,
-            part="snippet",
-            type="video",
-            maxResults=min(max_results, 50),
-            order="relevance",
-            regionCode="KR",
-            relevanceLanguage="ko",
-        ).execute()
+    service = _get_service()
+    request_kwargs = dict(
+        q=keyword,
+        part="snippet",
+        type="video",
+        maxResults=min(max_results, 50),
+        order="relevance",
+        regionCode="KR",
+        relevanceLanguage="ko",
+    )
+    if page_token:
+        request_kwargs["pageToken"] = page_token
 
-        videos = []
-        for item in response.get("items", []):
-            snippet = item["snippet"]
-            thumbnails = snippet.get("thumbnails", {})
-            thumbnail_url = (
-                thumbnails.get("high", {}).get("url")
-                or thumbnails.get("medium", {}).get("url")
-                or thumbnails.get("default", {}).get("url", "")
-            )
-            videos.append({
-                "videoId": item["id"]["videoId"],
-                "title": snippet.get("title", ""),
-                "channelTitle": snippet.get("channelTitle", ""),
-                "publishedAt": snippet.get("publishedAt", ""),
-                "thumbnail": thumbnail_url,
-                "description": snippet.get("description", ""),
-            })
-        return videos
+    response = service.search().list(**request_kwargs).execute()
 
-    except HttpError as e:
-        print(f"[youtube_api] search_videos HTTP error: {e}")
-        return []
-    except Exception as e:
-        print(f"[youtube_api] search_videos error: {e}")
-        return []
+    videos = []
+    for item in response.get("items", []):
+        snippet = item["snippet"]
+        thumbnails = snippet.get("thumbnails", {})
+        thumbnail_url = (
+            thumbnails.get("high", {}).get("url")
+            or thumbnails.get("medium", {}).get("url")
+            or thumbnails.get("default", {}).get("url", "")
+        )
+        videos.append({
+            "videoId": item["id"]["videoId"],
+            "title": snippet.get("title", ""),
+            "channelTitle": snippet.get("channelTitle", ""),
+            "publishedAt": snippet.get("publishedAt", ""),
+            "thumbnail": thumbnail_url,
+            "description": snippet.get("description", ""),
+        })
+
+    return {
+        "videos": videos,
+        "nextPageToken": response.get("nextPageToken"),
+        "totalResults": response.get("pageInfo", {}).get("totalResults", 0),
+    }
 
 
 def get_video_details(video_id: str) -> dict | None:
@@ -100,10 +114,10 @@ def get_video_details(video_id: str) -> dict | None:
         }
 
     except HttpError as e:
-        print(f"[youtube_api] get_video_details HTTP error: {e}")
+        config.log_error("get_video_details", e)
         return None
     except Exception as e:
-        print(f"[youtube_api] get_video_details error: {e}")
+        config.log_error("get_video_details", e)
         return None
 
 
@@ -133,10 +147,10 @@ def get_popular_comments(video_id: str, max_results: int = 10) -> list[dict]:
         return comments
 
     except HttpError as e:
-        print(f"[youtube_api] get_popular_comments HTTP error: {e}")
+        config.log_error("get_popular_comments", e)
         return []
     except Exception as e:
-        print(f"[youtube_api] get_popular_comments error: {e}")
+        config.log_error("get_popular_comments", e)
         return []
 
 
@@ -174,7 +188,7 @@ def get_video_captions(video_id: str) -> str | None:
     except ImportError:
         pass  # youtube-transcript-api not installed
     except Exception as e:
-        print(f"[youtube_api] get_video_captions transcript error: {e}")
+        config.log_error("get_video_captions", e)
 
     # Fallback: return the video description
     try:
@@ -187,12 +201,15 @@ def get_video_captions(video_id: str) -> str | None:
     return None
 
 
-def search_trending_videos(keyword: str = "연애", max_results: int = 20) -> list[dict]:
+def search_trending_videos(keyword: str = "연애", max_results: int = 10) -> dict:
     """Search for videos that are about to trend.
 
     Criteria: 1,000~5,000 views uploaded within the last 24 hours,
     implying a growth rate of roughly 150+ views/hour.
-    Returns the same dict shape as search_videos.
+    Returns the same dict shape as search_videos (with ``videos`` list and
+    ``nextPageToken``).  Trending search does not paginate through YouTube
+    API pages because it needs statistics filtering, so ``nextPageToken``
+    is always ``None``.
     """
     try:
         from datetime import timedelta, timezone
@@ -219,7 +236,7 @@ def search_trending_videos(keyword: str = "연애", max_results: int = 20) -> li
 
         video_ids = [item["id"]["videoId"] for item in response.get("items", [])]
         if not video_ids:
-            return []
+            return {"videos": [], "nextPageToken": None}
 
         stats_response = (
             service.videos()
@@ -260,14 +277,14 @@ def search_trending_videos(keyword: str = "연애", max_results: int = 20) -> li
                 )
 
         results.sort(key=lambda v: v["viewsPerHour"], reverse=True)
-        return results[:max_results]
+        return {"videos": results[:max_results], "nextPageToken": None}
 
     except HttpError as e:
-        print(f"[youtube_api] search_trending_videos HTTP error: {e}")
-        return []
+        config.log_error("search_trending_videos", e)
+        return {"videos": [], "nextPageToken": None}
     except Exception as e:
-        print(f"[youtube_api] search_trending_videos error: {e}")
-        return []
+        config.log_error("search_trending_videos", e)
+        return {"videos": [], "nextPageToken": None}
 
 
 def extract_video_id(url: str) -> str | None:
