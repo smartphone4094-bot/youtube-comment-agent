@@ -23,6 +23,7 @@ _EXAMPLE_PATH = os.path.join(_ROOT, "settings.example.yaml")
 # Never full model IDs: those go stale, and a list match always exists on the service.
 AI_PROVIDERS = {
     "openrouter": {"label": "OpenRouter", "key_url": "https://openrouter.ai/keys",
+                   "shared_limit": True,  # the daily free limit covers every model on the account
                    "prefer": ("gemma", "nemotron-3.5-lightning", "nemotron")},
     "gemini": {"label": "Google Gemini", "key_url": "https://aistudio.google.com/apikey",
                "prefer": ("gemini-flash-latest", "flash")},
@@ -32,6 +33,7 @@ AI_PROVIDERS = {
                "prefer": ("mini",)},
     "groq": {"label": "Groq (무료 등급)", "key_url": "https://console.groq.com/keys",
              "base_url": "https://api.groq.com/openai/v1",
+             "extra_body": {"reasoning_effort": "low"},  # thinking otherwise uses up max_tokens
              "prefer": ("gpt-oss-120b", "qwen", "gpt-oss", "llama")},
     "cerebras": {"label": "Cerebras (무료 등급)", "key_url": "https://cloud.cerebras.ai",
                  "base_url": "https://api.cerebras.ai/v1",
@@ -190,7 +192,7 @@ def ai_base_url(provider: str | None = None) -> str:
 
 
 def ai_ready() -> bool:
-    return bool(ai_key())
+    return any(ai_key(provider) for provider in AI_PROVIDERS)
 
 
 # -- connected Google accounts --------------------------------------------------------
@@ -203,6 +205,7 @@ def save_profiles(profiles: list[dict]):
     settings = load_settings()
     settings["profiles"] = profiles
     save_settings(settings)
+    log_event("accounts_saved", f"count={len(profiles)}")
 
 
 # App-owned Chrome profiles hold Google login sessions, so they live outside the repository.
@@ -230,6 +233,7 @@ def remove_managed_profile(path: str):
 # Error logging
 # ---------------------------------------------------------------------------
 _ERROR_LOG_PATH = os.path.join(os.path.dirname(__file__), "data", "error.log")
+_ACTIVITY_LOG_PATH = os.path.join(os.path.dirname(__file__), "data", "activity.log")
 
 
 def _ensure_log_dir():
@@ -243,10 +247,27 @@ def log_error(source: str, error: Exception, context: str = ""):
     line = f"[{timestamp}] [{source}] {type(error).__name__}: {error}"
     if context:
         line += f" | context: {context}"
+    line = _mask_secrets(line)
+    _append_line(_ERROR_LOG_PATH, line)
+    _append_line(_ACTIVITY_LOG_PATH, line)
+
+
+def log_event(source: str, message: str = ""):
+    """Append what the app did to data/activity.log, the full record next to the error log."""
+    _ensure_log_dir()
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    _append_line(_ACTIVITY_LOG_PATH, _mask_secrets(f"[{timestamp}] [{source}] {message}"))
+
+
+def _mask_secrets(line: str) -> str:
     # googleapiclient's HttpError includes the request URL, API key included.
     line = re.sub(r"(key=)[^&\s>]+", r"\1***", " ".join(line.split()))
+    return re.sub(r"Bearer \S+|AIza[\w-]{20,}|\b(?:sk|gsk|csk|nvapi)[-_][\w-]{16,}", "***", line)
+
+
+def _append_line(path: str, line: str):
     try:
-        with open(_ERROR_LOG_PATH, "a", encoding="utf-8") as f:
+        with open(path, "a", encoding="utf-8") as f:
             f.write(line + "\n")
     except OSError:
         pass

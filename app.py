@@ -1475,6 +1475,7 @@ def show_api_settings_dialog(reason: str | None = None):
         if info.get("base_url_editable"):
             api.setdefault("ai_base_urls", {})[provider] = base_url.strip()
         config.save_settings(settings)
+        config.log_event("settings_saved", f"provider={provider} model={model.strip() or '자동'}")
         st.session_state.login_notice = ("toast", "설정을 저장했습니다.")
         st.rerun()
 
@@ -1816,6 +1817,7 @@ if current == 1:
                     )
                     videos_page = result.get("videos", [])
                     next_token = result.get("nextPageToken")
+                    config.log_event("search", f"keyword={keyword.strip()} results={len(videos_page)}")
 
                     if videos_page:
                         st.session_state.videos = videos_page
@@ -1864,6 +1866,7 @@ if current == 1:
                     with st.spinner("영상 정보를 불러오는 중..."):
                         try:
                             details = youtube_api.get_video_details(vid)
+                            config.log_event("load_url", f"videoId={vid} found={bool(details)}")
                             if details:
                                 st.session_state.selected_video = details
                                 _reset_generation()
@@ -1943,6 +1946,7 @@ if current == 1:
                             if not _require_ai_key():
                                 pass
                             elif st.session_state.profiles_list:
+                                config.log_event("select_video", f"videoId={video.get('videoId')} title={video.get('title')}")
                                 _select_video(video)
                             else:
                                 show_login_required_dialog()
@@ -2003,6 +2007,7 @@ if current == 1:
                                     )
                                     new_videos = result.get("videos", [])
                                     new_next_token = result.get("nextPageToken")
+                                    config.log_event("search_page", f"page={next_page} results={len(new_videos)}")
                                     if new_videos:
                                         st.session_state.search_pages_cache[next_page] = new_videos
                                         st.session_state.search_current_page = next_page
@@ -2096,6 +2101,8 @@ elif current == 2:
             except Exception as e:
                 config.log_error("get_popular_comments", e, f"videoId={video_id}")
                 popular_comments = []
+            config.log_event("video_content", f"videoId={video_id} captions={len(transcript or '')}자 "
+                                              f"popular_comments={len(popular_comments)}")
             analysis = {
                 "video_id": video_id,
                 "transcript": transcript,
@@ -2104,7 +2111,7 @@ elif current == 2:
             st.session_state.analysis = analysis
 
         _loading_overlay(
-            overlay, "영상 속 고민을 분석하고 댓글을 쓰는 중", 2,
+            overlay, "댓글 생성중", 2,
             estimate=estimate, elapsed=time.monotonic() - load_started,
         )
         try:

@@ -216,7 +216,7 @@ class FakeConfig(_Proxy):
         return (self._part("api").get("ai_models") or {}).get(provider or self.ai_provider()) or ""
 
     def ai_ready(self):
-        return bool(self.ai_key())
+        return any(self.ai_key(provider) for provider in self._real.AI_PROVIDERS)
 
     def comment_min_chars(self):
         return int(self._part("comment").get("min_chars", 0))
@@ -264,6 +264,9 @@ class FakeConfig(_Proxy):
         pass
 
     def log_error(self, source, error, context=""):
+        pass
+
+    def log_event(self, source, message=""):
         pass
 
     def read_error_log_by_date(self, target_date=None, limit=50):

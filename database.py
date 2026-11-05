@@ -2,6 +2,8 @@ import sqlite3
 import os
 from datetime import date
 
+import config
+
 DB_PATH = os.path.join(os.path.dirname(__file__), "data", "comments.db")
 
 
@@ -56,6 +58,8 @@ def today_count() -> int:
 
 
 def log_comment(video_id, video_title, profile_index, comment, success, error=None):
+    config.log_event("comment_post", f"success={bool(success)} videoId={video_id} account={profile_index} "
+                                     f"title={video_title} error={error} | {comment}")
     conn = _get_conn()
     conn.execute(
         "INSERT INTO comments (video_id, video_title, profile_index, comment, success, error) VALUES (?, ?, ?, ?, ?, ?)",
