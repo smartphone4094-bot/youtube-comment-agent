@@ -149,8 +149,11 @@ def read_chrome_profile_info(profile_path: str) -> dict:
     if not profile_path:
         return result
 
-    prefs_path = os.path.join(profile_path.replace("/", os.sep), "Preferences")
-    if not os.path.isfile(prefs_path):
+    # A profile directory holds Preferences itself; an app-owned user-data dir keeps it in Default/.
+    profile_dir = profile_path.replace("/", os.sep)
+    candidates = [os.path.join(profile_dir, "Preferences"), os.path.join(profile_dir, "Default", "Preferences")]
+    prefs_path = next((p for p in candidates if os.path.isfile(p)), None)
+    if not prefs_path:
         return result
 
     try:
@@ -165,10 +168,7 @@ def read_chrome_profile_info(profile_path: str) -> dict:
             result["picture"] = first.get("picture_url", "") or first.get(
                 "last_downloaded_image_url_with_size", ""
             )
-
-        # Fallback to profile.name if no Google account name
-        if not result["name"]:
-            result["name"] = prefs.get("profile", {}).get("name", "")
+        # profile.name is not used: it is Chrome's own label (e.g. "내 Chrome"), not the Google name.
     except (json.JSONDecodeError, OSError, KeyError):
         pass
 

@@ -3,6 +3,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from playwright.async_api import async_playwright
 import config
 import time
@@ -11,6 +12,18 @@ _GOOGLE_LOGIN_URL = "https://accounts.google.com/ServiceLogin?continue=https%3A%
 _GOOGLE_ACCOUNTS_URL = "https://accounts.google.com/ListAccounts?gpsia=1&source=ChromiumBrowser&json=standard"
 
 _active_login = None
+
+
+def _run(coro):
+    """Run a Playwright coroutine.
+
+    Streamlit (via Tornado) switches Windows to the selector event loop, which cannot start
+    subprocesses, so Playwright fails with NotImplementedError under plain asyncio.run().
+    """
+    if sys.platform == "win32":
+        with asyncio.Runner(loop_factory=asyncio.ProactorEventLoop) as runner:
+            return runner.run(coro)
+    return asyncio.run(coro)
 
 
 def get_available_profiles() -> list[dict]:
@@ -107,11 +120,16 @@ def finish_google_login() -> dict | None:
     login, _active_login = _active_login, None
     account = None
     try:
-        account = asyncio.run(_read_google_account_async(login["path"]))
+        account = _run(_read_google_account_async(login["path"]))
     finally:
         if not account:
             config.remove_managed_profile(login["path"])
-    return {**account, "path": login["path"]} if account else None
+    if not account:
+        return None
+    # ListAccounts only gives a legacy photo URL that shows Google's grey placeholder;
+    # the profile Chrome just closed records the account's real photo.
+    picture = config.read_chrome_profile_info(login["path"])["picture"] or account["picture"]
+    return {**account, "picture": picture, "path": login["path"]}
 
 
 async def _post_comment_async(video_id: str, comment: str, profile_index: int, status_callback=None):
@@ -193,6 +211,6 @@ async def _post_comment_async(video_id: str, comment: str, profile_index: int, s
 
 
 def post_comment(video_id: str, comment: str, profile_index: int = 0, status_callback=None) -> dict:
-    return asyncio.run(
+    return _run(
         _post_comment_async(video_id, comment, profile_index, status_callback)
     )
