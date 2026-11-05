@@ -42,19 +42,89 @@ if "--ui-dev" in sys.argv:
 # ---------------------------------------------------------------------------
 st.markdown("""
 <style>
-    /* Colors derive from the inherited text color, so they hold in any Streamlit theme. */
+    @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css");
+
+    /* Palette: soft lavender (sazasaju.com colors), tuned for text contrast.
+       The toolbar is hidden, so Streamlit's theme always follows the system scheme. */
     :root {
         --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
-        --text-secondary: color-mix(in srgb, currentColor 62%, transparent);
-        --hairline: rgba(128, 128, 128, 0.22);
-        --fill: rgba(128, 128, 128, 0.12);
-        --border-strong: rgba(128, 128, 128, 0.38);
+        --bg: #FDFBF7;
+        --bg-glow: #EFE9FF;
+        --card: #FFFFFF;
+        --surface: #F5F2FF;
+        --surface-strong: #ECE7FF;
+        --text: #2D2B3D;
+        --text-secondary: #6B6978;
+        --hairline: #E8E6EF;
+        --fill: #F5F2FF;
+        --border-strong: #DCD6FF;
         /* One accent, reserved for the main action on each screen */
-        --accent: #E8484C;
-        --accent-hover: #D33C40;
-        --accent-ring: rgba(232, 72, 76, 0.28);
-        --font-system: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI",
-            "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+        --accent: #7B6FDF;
+        --accent-hover: #6B5FCF;
+        --accent-text: #6B5FCF;
+        --accent-ring: rgba(155, 143, 255, 0.38);
+        --accent-shadow: rgba(123, 111, 223, 0.5);
+        --card-shadow: 0 6px 20px -8px rgba(60, 40, 120, 0.18);
+        --font-system: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+            "Apple SD Gothic Neo", "Segoe UI", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+    }
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --bg: #1A1625;
+            --bg-glow: #2D2550;
+            --card: #241F35;
+            --surface: #2A2438;
+            --surface-strong: #352D4D;
+            --text: #F5F0FF;
+            --text-secondary: #A7A3B5;
+            --hairline: #3D3555;
+            --fill: #2A2438;
+            --border-strong: #4D4470;
+            --accent-text: #B8AFFF;
+            --accent-shadow: rgba(0, 0, 0, 0.5);
+            --card-shadow: 0 6px 20px -8px rgba(0, 0, 0, 0.5);
+        }
+    }
+
+    /* ── Surfaces ── */
+    .stApp {
+        background: linear-gradient(180deg, var(--bg-glow) 0, var(--bg) 440px) var(--bg) !important;
+        color: var(--text);
+    }
+    .stApp [data-testid="stMarkdownContainer"],
+    .stApp h1, .stApp h2, .stApp h3,
+    [data-testid="stWidgetLabel"] {
+        color: var(--text);
+    }
+    [data-testid="stDecoration"] {
+        background-image: linear-gradient(90deg, #9B8FFF, #FFB8D0) !important;
+    }
+    /* Only the bordered row container itself: its own block directly holds the thumbnail/info columns */
+    [data-testid="stVerticalBlockBorderWrapper"]:has(> div > [data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"] .video-title:not(.full)) {
+        background: var(--card);
+        border: 1px solid var(--hairline) !important;
+        border-radius: 16px !important;
+        box-shadow: var(--card-shadow);
+        padding: 14px !important;
+        transition: border-color 150ms ease, box-shadow 200ms var(--ease-out);
+    }
+    @media (hover: hover) and (pointer: fine) {
+        [data-testid="stVerticalBlockBorderWrapper"]:has(> div > [data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"] .video-title:not(.full)):hover {
+            border-color: var(--border-strong) !important;
+            box-shadow: 0 10px 28px -10px rgba(60, 40, 120, 0.26);
+        }
+    }
+    /* Alerts take the palette: info is lavender, the rest stay semantic but soft */
+    [data-testid="stAlertContainer"] {
+        border-radius: 14px !important;
+    }
+    [data-testid="stAlertContainer"]:has([data-testid="stAlertContentInfo"]) {
+        background: var(--surface) !important;
+        border: 1px solid var(--border-strong);
+    }
+    [data-testid="stAlertContentInfo"],
+    [data-testid="stAlertContentInfo"] [data-testid="stMarkdownContainer"] {
+        color: var(--text) !important;
     }
 
     /* ── Page chrome ── */
@@ -119,7 +189,7 @@ st.markdown("""
     /* ── Buttons: feedback lands on press, release settles ── */
     .stButton button,
     [data-testid="stPopover"] button {
-        border-radius: 10px !important;
+        border-radius: 12px !important;
         font-weight: 600 !important;
         transition: transform 160ms var(--ease-out), background-color 150ms ease,
             border-color 150ms ease, color 150ms ease, box-shadow 150ms ease !important;
@@ -130,34 +200,32 @@ st.markdown("""
     }
     .stButton button p {
         font-size: 0.95rem !important;
-        font-weight: 600 !important;
+        font-weight: 700 !important;
     }
     /* Primary: solid accent with a soft lift */
     .stButton button[kind="primary"] {
         background: var(--accent) !important;
         border: 1px solid var(--accent) !important;
         color: #fff !important;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(232, 72, 76, 0.22),
-            inset 0 1px 0 rgba(255, 255, 255, 0.16);
+        box-shadow: 0 8px 20px -8px var(--accent-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.18);
     }
     @media (hover: hover) and (pointer: fine) {
         .stButton button[kind="primary"]:hover:not(:disabled) {
             background: var(--accent-hover) !important;
             border-color: var(--accent-hover) !important;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), 0 4px 14px rgba(232, 72, 76, 0.3),
-                inset 0 1px 0 rgba(255, 255, 255, 0.16);
+            box-shadow: 0 10px 24px -8px var(--accent-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.18);
         }
     }
-    /* Secondary: a visible outline that fills on hover */
+    /* Secondary: lavender outline on a card surface, fills on hover */
     .stButton button[kind="secondary"] {
-        background: transparent !important;
+        background: var(--card) !important;
         border: 1px solid var(--border-strong) !important;
-        color: inherit !important;
+        color: var(--accent-text) !important;
     }
     @media (hover: hover) and (pointer: fine) {
         .stButton button[kind="secondary"]:hover:not(:disabled) {
-            background: var(--fill) !important;
-            border-color: color-mix(in srgb, currentColor 45%, transparent) !important;
+            background: var(--surface) !important;
+            border-color: var(--accent) !important;
         }
     }
     .stButton button:focus-visible {
@@ -183,12 +251,26 @@ st.markdown("""
     [data-baseweb="input"],
     [data-baseweb="textarea"],
     [data-baseweb="select"] > div {
-        border-radius: 10px !important;
+        border-radius: 12px !important;
+        background: var(--card) !important;
+        border: 1px solid var(--border-strong) !important;
+        transition: border-color 150ms ease, box-shadow 150ms ease;
+    }
+    [data-baseweb="input"] > div,
+    [data-baseweb="input"] input,
+    [data-baseweb="textarea"] > div,
+    [data-baseweb="textarea"] textarea {
+        background: transparent !important;
+        color: var(--text) !important;
     }
     [data-baseweb="input"]:focus-within,
-    [data-baseweb="textarea"]:focus-within {
-        box-shadow: 0 0 0 3px rgba(255, 75, 75, 0.16);
-        transition: box-shadow 150ms ease;
+    [data-baseweb="textarea"]:focus-within,
+    [data-baseweb="select"] > div:focus-within {
+        border-color: var(--accent) !important;
+        box-shadow: 0 0 0 3px var(--accent-ring);
+    }
+    .stExpander details {
+        background: var(--card);
     }
 
     hr {
@@ -355,11 +437,11 @@ st.markdown("""
         white-space: nowrap;
         transition: background-color 200ms var(--ease-out), color 200ms var(--ease-out);
     }
-    /* Neutral ink for "you are here", so the accent stays on the action buttons */
+    /* A soft lavender tint for "you are here"; the solid accent stays on the action buttons */
     .step-item.active {
-        background: CanvasText;
-        color: Canvas;
-        font-weight: 600;
+        background: var(--surface-strong);
+        color: var(--accent-text);
+        font-weight: 700;
     }
     .step-item.completed {
         color: #28a745;
@@ -385,8 +467,8 @@ st.markdown("""
         font-variant-numeric: tabular-nums;
     }
     .step-item.active .step-num {
-        background: Canvas;
-        color: CanvasText;
+        background: var(--accent);
+        color: #fff;
     }
     .step-item.completed .step-num {
         background: #28a745;
@@ -400,7 +482,10 @@ st.markdown("""
     /* ── Profile popover: its transform is the position, so it must not be animated ── */
     [data-testid="stPopover"] button {
         border-radius: 20px !important;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        background: var(--card) !important;
+        border: 1px solid var(--border-strong) !important;
+        color: var(--text) !important;
+        box-shadow: 0 3px 12px rgba(138, 124, 240, 0.12);
     }
     [data-testid="stPopoverBody"] {
         width: min(420px, calc(100vw - 24px)) !important;
@@ -1090,7 +1175,7 @@ if current == 1:
                 == video.get("videoId")
             )
 
-            with st.container():
+            with st.container(border=True):
                 c_img, c_info = st.columns([1, 3])
                 with c_img:
                     st.markdown(_thumb_html(thumb), unsafe_allow_html=True)
@@ -1131,8 +1216,6 @@ if current == 1:
                                 _select_video(video)
                             else:
                                 show_login_required_dialog()
-
-                st.divider()
 
         if st.session_state.pop("scroll_to_top", False):
             _scroll_to_top()
