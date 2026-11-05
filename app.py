@@ -440,6 +440,89 @@ st.markdown("""
         color: var(--text-secondary);
     }
 
+    /* ── Step 2 loading popup ── */
+    .loading-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 999990;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        background: rgba(26, 22, 37, 0.28);
+        -webkit-backdrop-filter: blur(6px) saturate(140%);
+        backdrop-filter: blur(6px) saturate(140%);
+        animation: surface-fade 160ms ease;
+    }
+    .loading-modal {
+        width: min(340px, 100%);
+        padding: 28px 28px 24px;
+        border-radius: 20px;
+        background: var(--card);
+        border: 1px solid var(--hairline);
+        box-shadow: 0 24px 70px rgba(60, 40, 120, 0.22), 0 6px 18px rgba(0, 0, 0, 0.08);
+        text-align: center;
+        animation: surface-in 220ms var(--ease-out);
+    }
+    .loading-spinner {
+        width: 40px;
+        height: 40px;
+        margin: 0 auto 16px;
+        border-radius: 50%;
+        border: 3px solid var(--surface-strong);
+        border-top-color: var(--accent);
+        animation: loading-spin 800ms linear infinite;
+    }
+    .loading-title {
+        font-size: 1.02rem;
+        font-weight: 700;
+        letter-spacing: -0.015em;
+        color: var(--text);
+        word-break: keep-all;
+    }
+    .loading-steps {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        margin-top: 12px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        font-variant-numeric: tabular-nums;
+    }
+    .loading-steps span:last-child {
+        margin-left: 4px;
+    }
+    .loading-dot {
+        width: 18px;
+        height: 4px;
+        border-radius: 999px;
+        background: var(--surface-strong);
+        transition: background-color 200ms ease;
+    }
+    .loading-dot.on {
+        background: var(--accent);
+    }
+    .loading-hint {
+        margin: 10px 0 0 !important;
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+    }
+    @keyframes loading-spin {
+        to { transform: rotate(360deg); }
+    }
+    /* The previous screen's leftovers stay hidden while the popup is up */
+    .stApp:has(.loading-overlay) [data-stale="true"],
+    .stApp:has(.loading-overlay) [data-testid="stVerticalBlockBorderWrapper"]:has([data-stale="true"]):not(:has([data-stale="false"])),
+    .stApp:has(.loading-overlay) [data-testid="stHorizontalBlock"]:has([data-stale="true"]):not(:has([data-stale="false"])) {
+        visibility: hidden;
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .loading-spinner { animation-duration: 2400ms; }
+        .loading-overlay, .loading-modal { animation: none; }
+    }
+
     /* ── Step 2 cards (section / featured), after sazasaju.com/fortune ── */
     .section-card,
     [data-testid="stVerticalBlockBorderWrapper"]:has(> div > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"] .comment-card-head) {
@@ -959,6 +1042,7 @@ for key, val in defaults.items():
 # ---------------------------------------------------------------------------
 def go_to_step(step: int):
     st.session_state.current_step = step
+    st.session_state.scroll_to_top = "jump"  # a new step starts at its top, not where the last one was scrolled
     st.rerun()
 
 
@@ -1236,17 +1320,26 @@ def _render_scroll_anchor():
     elements after it, and Streamlit briefly shows the stale copies (a doubled pagination row).
     Unchanged content keeps the iframe as is; a new nonce reloads it and runs the scroll.
     """
-    if st.session_state.pop("scroll_to_top", False):
+    request = st.session_state.pop("scroll_to_top", False)
+    if request:
         st.session_state.scroll_nonce = st.session_state.get("scroll_nonce", 0) + 1
+        # A page turn glides up; a new step jumps, since its page is still being laid out.
+        st.session_state.scroll_behavior = "auto" if request == "jump" else "smooth"
     nonce = st.session_state.get("scroll_nonce", 0)
+    behavior = st.session_state.get("scroll_behavior", "smooth")
     components.html(
         f"""<script>
         // nonce {nonce}
         if ({nonce} > 0) {{
-            const doc = window.parent.document;
-            doc.querySelectorAll('[data-testid="stMain"], [data-testid="stAppViewContainer"], section.main')
-                .forEach(el => el.scrollTo({{top: 0, behavior: "smooth"}}));
-            window.parent.scrollTo({{top: 0, behavior: "smooth"}});
+            const up = () => {{
+                const doc = window.parent.document;
+                doc.querySelectorAll('[data-testid="stMain"], [data-testid="stAppViewContainer"], section.main')
+                    .forEach(el => el.scrollTo({{top: 0, behavior: "{behavior}"}}));
+                window.parent.scrollTo({{top: 0, behavior: "{behavior}"}});
+            }};
+            // Wait for Streamlit to finish placing this run's elements, which would cancel the scroll.
+            setTimeout(up, 80);
+            if ("{behavior}" === "auto") setTimeout(up, 400);
         }}
         </script>""",
         height=0,
@@ -1262,6 +1355,24 @@ def _select_video(video: dict):
             st.session_state.selected_video = video
     _reset_generation()
     go_to_step(2)
+
+
+def _loading_overlay(placeholder, message: str, stage: int, stages: int = 2):
+    """A centered popup over the page while step 2 loads. While it is up, the previous
+    screen's leftover (stale) elements are hidden instead of showing through, faded."""
+    dots = "".join(
+        f'<span class="loading-dot{" on" if i <= stage else ""}"></span>' for i in range(1, stages + 1)
+    )
+    placeholder.markdown(
+        f'<div class="loading-overlay" role="status" aria-live="polite">'
+        f'<div class="loading-modal">'
+        f'<div class="loading-spinner" aria-hidden="true"></div>'
+        f'<div class="loading-title">{html.escape(message)}</div>'
+        f'<div class="loading-steps">{dots}<span>{stage} / {stages}</span></div>'
+        f'<p class="loading-hint">보통 10~30초 걸려요</p>'
+        f"</div></div>",
+        unsafe_allow_html=True,
+    )
 
 
 def _reset_generation():
@@ -1554,10 +1665,15 @@ elif current == 2:
             unsafe_allow_html=True,
         )
 
-    # -- 1. Video content: the transcript, or the description when there are no captions --
+    # -- Loading happens in a popup over the new page, once per video; then the page reruns
+    #    with everything in place. A failed generation waits for a retry instead of looping. --
     analysis = st.session_state.analysis
-    if not analysis or analysis.get("video_id") != video_id:
-        with st.spinner("영상 내용을 불러오는 중..."):
+    need_content = not analysis or analysis.get("video_id") != video_id
+    need_comment = st.session_state.ai_result is None and not st.session_state.analysis_error
+    if need_content or need_comment:
+        overlay = st.empty()
+        if need_content:
+            _loading_overlay(overlay, "영상 자막을 불러오는 중", 1)
             transcript = None
             try:
                 transcript = youtube_api.get_transcript(video_id)
@@ -1568,13 +1684,34 @@ elif current == 2:
             except Exception as e:
                 config.log_error("get_popular_comments", e, f"videoId={video_id}")
                 popular_comments = []
-        analysis = {
-            "video_id": video_id,
-            "transcript": transcript,
-            "popular_comments": popular_comments,
-        }
-        st.session_state.analysis = analysis
+            analysis = {
+                "video_id": video_id,
+                "transcript": transcript,
+                "popular_comments": popular_comments,
+            }
+            st.session_state.analysis = analysis
 
+        _loading_overlay(overlay, "영상 속 고민을 분석하고 댓글을 쓰는 중", 2)
+        try:
+            result = ai_comment.generate_comment(
+                title=sv.get("title", ""),
+                description=sv.get("description", ""),
+                captions=analysis["transcript"],
+                popular_comments=analysis["popular_comments"],
+            )
+        except Exception as e:
+            config.log_error("generate_comment", e, f"videoId={video_id}")
+            result = None
+        if result:
+            st.session_state.ai_result = result
+            st.session_state.edited_comment = result.get("comment", "")
+            st.session_state.confirmed_comment = None
+            st.session_state.pop("comment_edit_area", None)
+        else:
+            st.session_state.analysis_error = True
+        st.rerun()
+
+    # -- 1. Video content: the captions, or the description when there are none --
     transcript = analysis["transcript"]
     description = (sv.get("description") or "").strip()
     if transcript:
@@ -1594,28 +1731,6 @@ elif current == 2:
         f"{content_body}</section>",
         unsafe_allow_html=True,
     )
-
-    # -- 2. Analysis runs by itself once per video; a failure waits for a retry instead of looping --
-    if st.session_state.ai_result is None and not st.session_state.analysis_error:
-        with st.spinner("영상 속 고민을 분석하고 댓글을 쓰는 중..."):
-            try:
-                result = ai_comment.generate_comment(
-                    title=sv.get("title", ""),
-                    description=sv.get("description", ""),
-                    captions=transcript,
-                    popular_comments=analysis["popular_comments"],
-                )
-            except Exception as e:
-                config.log_error("generate_comment", e, f"videoId={video_id}")
-                result = None
-        if result:
-            st.session_state.ai_result = result
-            st.session_state.edited_comment = result.get("comment", "")
-            st.session_state.confirmed_comment = None
-            st.session_state.pop("comment_edit_area", None)
-        else:
-            st.session_state.analysis_error = True
-        st.rerun()
 
     if st.session_state.analysis_error:
         st.error("댓글을 만드는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.")

@@ -5,6 +5,7 @@ the real database, profile file, YouTube API or browser automation.
 """
 
 import html
+import time
 from datetime import date, timedelta
 
 import streamlit as st
@@ -110,6 +111,7 @@ class FakeYouTube(_Proxy):
         return None
 
     def get_transcript(self, video_id):
+        time.sleep(1.5)  # real caption fetches take a moment; keeps the loading popup visible
         if self._mode == "empty":
             return None  # no captions: the page falls back to the description
         if self._mode == "one":
@@ -263,6 +265,7 @@ class FakeBrowser(_Proxy):
 
 class FakeAI(_Proxy):
     def generate_comment(self, title, description, captions, popular_comments):
+        time.sleep(2.5)  # like a real model call, so the loading popup can be seen
         return {
             "concern": "상대방의연락이갑자기줄어들어서불안해하는고민이영상전체에걸쳐공백없이이어지고있습니다" * 3 + " **마크다운** $1 $2",
             "comment": "저도 비슷한 고민이 있었는데 운명원에서 상담받고 마음이 많이 편해졌어요. " * 2,
