@@ -197,8 +197,16 @@ def _fetch_transcript(api, video_id: str) -> str | None:
             return None
         transcript = first.translate("ko") if first.is_translatable else first
 
-    text = _clean_caption(" ".join(snippet.text for snippet in transcript.fetch()))
+    raw = " ".join(snippet.text for snippet in transcript.fetch())
+    text = _clean_caption(raw)
+    # Shorts with only a background song get auto-captions of the lyrics; those aren't what the video says
+    if _MUSIC_TAG.search(raw) and len(text) < _MIN_SPEECH_CHARS:
+        return None
     return text or None
+
+
+_MUSIC_TAG = re.compile(r"\[(음악|노래|Music|music|♪)[^\]]*\]|♪")
+_MIN_SPEECH_CHARS = 200
 
 
 def extract_video_id(url: str) -> str | None:

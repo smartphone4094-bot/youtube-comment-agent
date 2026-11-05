@@ -336,6 +336,9 @@ _ranked_models = {}
 _cooling = {}  # (provider, model, or None for the whole service) -> time.monotonic() it clears
 _MAX_RETRY_WAIT = 60
 _SHORT_COOLDOWN = 60
+# A model that timed out or was overloaded tends to stay that way for the next few videos;
+# retrying it each time cost a 45s timeout per comment, while the service's other models answered.
+_BUSY_COOLDOWN = 600
 _DAILY_COOLDOWN = 3600
 _GONE_COOLDOWN = 86400
 _MAX_ROUNDS = 4
@@ -422,7 +425,7 @@ def _call_model(prompt: str, writing: bool = False) -> str:
                 _cool(provider, model, _GONE_COOLDOWN)
                 failed, failure = e, e
             except ServiceBusyError as e:
-                _cool(provider, model, _SHORT_COOLDOWN)
+                _cool(provider, model, _BUSY_COOLDOWN)
                 failed, failure = e, e
             except Exception as e:  # a bad key or a dead connection won't clear in seconds
                 _cool(provider, None, _SHORT_COOLDOWN)
