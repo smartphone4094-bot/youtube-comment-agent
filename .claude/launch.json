@@ -10,8 +10,8 @@
     {
       "name": "streamlit-fixtures",
       "runtimeExecutable": "C:\\Python312\\python.exe",
-      "runtimeArgs": ["-m", "streamlit", "run", "app.py", "--server.port", "8503", "--server.headless", "true", "--", "--ui-dev"],
-      "port": 8503
+      "runtimeArgs": ["-m", "streamlit", "run", "app.py", "--server.port", "8504", "--server.headless", "true", "--", "--ui-dev"],
+      "port": 8504
     }
   ]
 }

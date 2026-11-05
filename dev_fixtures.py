@@ -4,6 +4,7 @@ Fakes replace the data modules at the import boundary, so nothing here reaches
 the real database, profile file, YouTube API or browser automation.
 """
 
+import copy
 import html
 import time
 from datetime import date, timedelta
@@ -178,7 +179,59 @@ class FakeDatabase(_Proxy):
 
 
 class FakeConfig(_Proxy):
-    YOUTUBE_API_KEY = "fixture"
+
+    # Settings live in the session, never in the real settings.yaml. They start from the
+    # real file's rules (no secrets) with fake keys; "empty" starts keyless so the
+    # "register a key" popups can be seen.
+    def _settings(self):
+        if "_fixture_settings" not in st.session_state:
+            base = self._real.load_settings()
+            key = "" if self._mode == "empty" else "fixture"
+            base["profiles"] = []
+            api = base.setdefault("api", {})
+            api["youtube_api_key"] = key
+            api["ai_keys"] = {provider: key for provider in self._real.AI_PROVIDERS}
+            st.session_state["_fixture_settings"] = base
+        return st.session_state["_fixture_settings"]
+
+    def _part(self, name):
+        return self._settings().get(name) or {}
+
+    def load_settings(self):
+        return copy.deepcopy(self._settings())
+
+    def save_settings(self, settings):
+        st.session_state["_fixture_settings"] = copy.deepcopy(settings)
+
+    def youtube_api_key(self):
+        return self._part("api").get("youtube_api_key") or ""
+
+    def ai_provider(self):
+        return self._part("api").get("ai_provider") or "openrouter"
+
+    def ai_key(self, provider=None):
+        return (self._part("api").get("ai_keys") or {}).get(provider or self.ai_provider()) or ""
+
+    def ai_model(self, provider=None):
+        return (self._part("api").get("ai_models") or {}).get(provider or self.ai_provider()) or ""
+
+    def ai_ready(self):
+        return bool(self.ai_key())
+
+    def comment_min_chars(self):
+        return int(self._part("comment").get("min_chars", 0))
+
+    def comment_max_chars(self):
+        return int(self._part("comment").get("max_chars", 0))
+
+    def brand_name(self):
+        return self._part("comment").get("brand", "")
+
+    def daily_max_comments(self):
+        return int(self._part("limits").get("daily_max_comments", 0))
+
+    def max_accounts(self):
+        return int(self._part("limits").get("max_accounts", 0))
 
     def __init__(self, real, mode):
         super().__init__(real, mode)

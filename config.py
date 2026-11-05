@@ -1,63 +1,208 @@
+import copy
 import json
 import os
 import re
 import shutil
 import uuid
 from datetime import datetime
-from dotenv import load_dotenv
 
-load_dotenv()
-
-YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "")
-
-# OpenRouter 설정 (무료 모델 지원)
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
-OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemini-3.1-flash-lite")
-
-# Anthropic 설정 (유료, 선택)
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-
-# 어떤 AI를 쓸지: "openrouter" 또는 "anthropic"
-AI_PROVIDER = os.getenv("AI_PROVIDER", "openrouter")
-
-DAILY_MAX_COMMENTS = int(os.getenv("DAILY_MAX_COMMENTS", "10"))
-COMMENT_MIN_CHARS = int(os.getenv("COMMENT_MIN_CHARS", "40"))
-COMMENT_MAX_CHARS = int(os.getenv("COMMENT_MAX_CHARS", "120"))
-BRAND_NAME = os.getenv("BRAND_NAME", "운명원")
+import yaml
 
 # ---------------------------------------------------------------------------
-# Chrome profiles: JSON file takes priority, .env as fallback
+# Settings: everything lives in settings.yaml (git-ignored). No value is hardcoded here.
+#   profiles - connected Google accounts      comment - min_chars / max_chars / brand
+#   limits   - daily_max_comments, max_accounts   api - YouTube key, AI service, keys, models
+# settings.example.yaml (committed, no secrets) seeds it on first run.
 # ---------------------------------------------------------------------------
-_PROFILES_PATH = os.path.join(os.path.dirname(__file__), "data", "profiles.json")
+_ROOT = os.path.dirname(os.path.abspath(__file__))
+SETTINGS_PATH = os.path.join(_ROOT, "settings.yaml")
+_EXAMPLE_PATH = os.path.join(_ROOT, "settings.example.yaml")
+
+# Service metadata only (names and where to get a key) — keys and models are settings.
+# "prefer": name fragments ranked for auto-selection from the service's live model list.
+# Never full model IDs: those go stale, and a list match always exists on the service.
+AI_PROVIDERS = {
+    "openrouter": {"label": "OpenRouter", "key_url": "https://openrouter.ai/keys",
+                   "prefer": ("gemma", "nemotron-3.5-lightning", "nemotron")},
+    "gemini": {"label": "Google Gemini", "key_url": "https://aistudio.google.com/apikey",
+               "prefer": ("gemini-flash-latest", "flash")},
+    "anthropic": {"label": "Claude (Anthropic)", "key_url": "https://console.anthropic.com/settings/keys",
+                  "prefer": ("haiku", "sonnet")},
+    "openai": {"label": "OpenAI", "key_url": "https://platform.openai.com/api-keys",
+               "prefer": ("mini",)},
+    "groq": {"label": "Groq (무료 등급)", "key_url": "https://console.groq.com/keys",
+             "base_url": "https://api.groq.com/openai/v1",
+             "prefer": ("gpt-oss-120b", "qwen", "gpt-oss", "llama")},
+    "cerebras": {"label": "Cerebras (무료 등급)", "key_url": "https://cloud.cerebras.ai",
+                 "base_url": "https://api.cerebras.ai/v1",
+                 "prefer": ("gpt-oss", "qwen", "llama")},
+    "mistral": {"label": "Mistral (무료 등급)", "key_url": "https://console.mistral.ai/api-keys",
+                "base_url": "https://api.mistral.ai/v1",
+                "prefer": ("small-latest", "small", "medium")},
+    "nvidia": {"label": "NVIDIA (무료 등급)", "key_url": "https://build.nvidia.com",
+               "base_url": "https://integrate.api.nvidia.com/v1",
+               "prefer": ("gpt-oss", "qwen", "llama", "nemotron")},
+    "cohere": {"label": "Cohere (무료 등급)", "key_url": "https://dashboard.cohere.com/api-keys",
+               "base_url": "https://api.cohere.ai/compatibility/v1",
+               "prefer": ("command-a", "command")},
+    "freellmapi": {"label": "FreeLLMAPI / 직접 지정 (OpenAI 호환)",
+                   "key_url": "https://github.com/tashfeenahmed/freellmapi",
+                   "base_url": "http://localhost:3001/v1", "base_url_editable": True, "default_model": "auto",
+                   "note": "FreeLLMAPI를 이 PC에 먼저 실행하고, 대시보드의 통합 키를 넣으세요. "
+                           "Ollama 같은 다른 OpenAI 호환 서버도 주소만 바꾸면 됩니다."},
+}
+
+_HEADER = (
+    "# 운명원 마케팅 AI에이전트 설정 — API 키와 계정이 들어 있어 git에 올라가지 않습니다(.gitignore).\n"
+    "# 앱의 [설정] 버튼과 계정 연결이 이 파일을 고칩니다. 직접 고쳐도 됩니다.\n\n"
+)
+
+_cache = {"mtime": None, "data": None}
 
 
-def _load_profiles_from_json() -> list[dict]:
-    if not os.path.exists(_PROFILES_PATH):
-        return []
-    with open(_PROFILES_PATH, encoding="utf-8") as f:
-        return json.load(f)
+def _read_yaml(path: str) -> dict:
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, yaml.YAMLError):
+        return {}
 
 
-def _load_profiles_from_env() -> list[dict]:
+def _legacy_values() -> dict:
+    """One-time carry-over from the old .env, data/profiles.json and data/settings.json."""
+    from dotenv import dotenv_values
+
+    env = dotenv_values(os.path.join(_ROOT, ".env"))
+    old = {}
+    old_settings_path = os.path.join(_ROOT, "data", "settings.json")
+    if os.path.exists(old_settings_path):
+        with open(old_settings_path, encoding="utf-8") as f:
+            old = json.load(f)
     profiles = []
-    for i in range(1, 4):
-        path = os.getenv(f"CHROME_PROFILE_{i}", "")
-        if path:
-            profiles.append({"name": f"유튜브{i}", "path": path})
-    return profiles
+    old_profiles_path = os.path.join(_ROOT, "data", "profiles.json")
+    if os.path.exists(old_profiles_path):
+        with open(old_profiles_path, encoding="utf-8") as f:
+            profiles = json.load(f)
+    else:
+        profiles = [
+            {"name": f"유튜브{i}", "email": "", "picture": "", "path": env[f"CHROME_PROFILE_{i}"]}
+            for i in range(1, 4) if env.get(f"CHROME_PROFILE_{i}")
+        ]
+    return {"env": env, "old": old, "profiles": profiles}
 
 
+def _create_settings() -> dict:
+    settings = _read_yaml(_EXAMPLE_PATH)
+    legacy = _legacy_values()
+    env, old = legacy["env"], legacy["old"]
+    settings["profiles"] = legacy["profiles"]
+    comment = settings.setdefault("comment", {})
+    for key, env_name in (("min_chars", "COMMENT_MIN_CHARS"), ("max_chars", "COMMENT_MAX_CHARS")):
+        if env.get(env_name):
+            comment[key] = int(env[env_name])
+    if env.get("BRAND_NAME"):
+        comment["brand"] = env["BRAND_NAME"]
+    if env.get("DAILY_MAX_COMMENTS"):
+        settings.setdefault("limits", {})["daily_max_comments"] = int(env["DAILY_MAX_COMMENTS"])
+    api = settings.setdefault("api", {})
+    api["youtube_api_key"] = old.get("youtube_api_key") or env.get("YOUTUBE_API_KEY") or ""
+    api["ai_provider"] = old.get("ai_provider") or env.get("AI_PROVIDER") or api.get("ai_provider")
+    keys, models = api.setdefault("ai_keys", {}), api.setdefault("ai_models", {})
+    for provider in AI_PROVIDERS:
+        env_key = env.get(f"{provider.upper()}_API_KEY")
+        keys[provider] = (old.get("ai_keys") or {}).get(provider) or env_key or keys.get(provider) or ""
+        models[provider] = (old.get("ai_models") or {}).get(provider) or models.get(provider) or ""
+    if env.get("OPENROUTER_MODEL") and not (old.get("ai_models") or {}).get("openrouter"):
+        models["openrouter"] = env["OPENROUTER_MODEL"]
+    save_settings(settings)
+    return settings
+
+
+def load_settings() -> dict:
+    """The whole settings file, re-read whenever it changes on disk (hand edits included)."""
+    if not os.path.exists(SETTINGS_PATH):
+        _create_settings()
+    mtime = os.path.getmtime(SETTINGS_PATH)
+    if _cache["mtime"] != mtime:
+        _cache["data"], _cache["mtime"] = _read_yaml(SETTINGS_PATH), mtime
+    return copy.deepcopy(_cache["data"])
+
+
+def save_settings(settings: dict):
+    with open(SETTINGS_PATH, "w", encoding="utf-8") as f:
+        f.write(_HEADER)
+        yaml.safe_dump(settings, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
+    _cache["mtime"] = None
+
+
+def _section(name: str) -> dict:
+    value = load_settings().get(name)
+    return value if isinstance(value, dict) else {}
+
+
+# -- comment rules and limits ---------------------------------------------------------
+def comment_min_chars() -> int:
+    return int(_section("comment").get("min_chars", 0))
+
+
+def comment_max_chars() -> int:
+    return int(_section("comment").get("max_chars", 0))
+
+
+def brand_name() -> str:
+    return str(_section("comment").get("brand", "")).strip()
+
+
+def daily_max_comments() -> int:
+    return int(_section("limits").get("daily_max_comments", 0))
+
+
+def max_accounts() -> int:
+    return int(_section("limits").get("max_accounts", 0))
+
+
+# -- API keys and AI service ----------------------------------------------------------
+def youtube_api_key() -> str:
+    return str(_section("api").get("youtube_api_key") or "").strip()
+
+
+def ai_provider() -> str:
+    provider = _section("api").get("ai_provider")
+    return provider if provider in AI_PROVIDERS else next(iter(AI_PROVIDERS))
+
+
+def ai_key(provider: str | None = None) -> str:
+    provider = provider or ai_provider()
+    return str((_section("api").get("ai_keys") or {}).get(provider) or "").strip()
+
+
+def ai_model(provider: str | None = None) -> str:
+    provider = provider or ai_provider()
+    saved = str((_section("api").get("ai_models") or {}).get(provider) or "").strip()
+    return saved or AI_PROVIDERS.get(provider, {}).get("default_model", "")
+
+
+def ai_base_url(provider: str | None = None) -> str:
+    provider = provider or ai_provider()
+    saved = str((_section("api").get("ai_base_urls") or {}).get(provider) or "").strip()
+    return saved or AI_PROVIDERS[provider].get("base_url", "")
+
+
+def ai_ready() -> bool:
+    return bool(ai_key())
+
+
+# -- connected Google accounts --------------------------------------------------------
 def load_profiles() -> list[dict]:
-    # An existing file wins even when empty, so disconnected accounts stay disconnected.
-    if os.path.exists(_PROFILES_PATH):
-        return _load_profiles_from_json()
-    return _load_profiles_from_env()
+    profiles = load_settings().get("profiles")
+    return profiles if isinstance(profiles, list) else []
 
 
 def save_profiles(profiles: list[dict]):
-    os.makedirs(os.path.dirname(_PROFILES_PATH), exist_ok=True)
-    with open(_PROFILES_PATH, "w", encoding="utf-8") as f:
-        json.dump(profiles, f, ensure_ascii=False, indent=2)
+    settings = load_settings()
+    settings["profiles"] = profiles
+    save_settings(settings)
 
 
 # App-owned Chrome profiles hold Google login sessions, so they live outside the repository.

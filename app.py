@@ -1,9 +1,13 @@
 """YouTube Comment Agent Dashboard - Main Streamlit application (step-based wizard)."""
 
 import html
+import json
 import math
+import os
 import re
+import statistics
 import sys
+import time
 from datetime import date, timedelta
 from urllib.parse import quote
 
@@ -137,6 +141,81 @@ st.markdown("""
     [data-testid="stHorizontalBlock"]:has(.app-header) > [data-testid="stColumn"]:last-child {
         flex: 0 0 6.5rem !important;
     }
+    [data-testid="stHorizontalBlock"]:has(.app-header) > [data-testid="stColumn"]:nth-child(2) {
+        flex: 0 0 6.5rem !important;
+    }
+    /* The settings button is the account button's twin: same pill, size, ink and shadow
+       (selector outranks the generic secondary-button rule, which made it purple and taller) */
+    .st-key-open_settings .stButton button[kind="secondary"] {
+        min-height: 40px;
+        height: 40px;
+        padding: 4px 12px !important;
+        border-radius: 20px !important;
+        background: var(--card) !important;
+        border: 1px solid var(--border-strong) !important;
+        color: var(--text) !important;
+        box-shadow: 0 3px 12px rgba(138, 124, 240, 0.12);
+        white-space: nowrap;
+    }
+    .st-key-open_settings .stButton button p {
+        font-size: 1rem !important;
+        font-weight: 600 !important;
+    }
+    @media (max-width: 480px) {
+        /* Icon only on phones, so the title keeps its room */
+        [data-testid="stHorizontalBlock"]:has(.app-header) > [data-testid="stColumn"]:nth-child(2) {
+            flex: 0 0 2.9rem !important;
+        }
+        .st-key-open_settings button p { display: none; }
+        .st-key-open_settings button { padding-inline: 0 !important; }
+    }
+    /* ── Settings popup: same flat look as before; only the rhythm is set ──
+       field-to-field 16px, a 28px break before each new section title, 6px under it */
+    [role="dialog"] [data-testid="stVerticalBlock"] {
+        gap: 16px;
+    }
+    .settings-section {
+        margin: 12px 0 -10px;
+        font-size: 0.8rem;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        color: var(--accent-text);
+    }
+    [role="dialog"] [data-testid="stElementContainer"]:first-child .settings-section,
+    [role="dialog"] [data-testid="stAlert"] + * .settings-section {
+        margin-top: 0;
+    }
+    /* Number fields: the global input style rounded only the text part and left the −/+
+       on a grey slab; make the whole thing one control like the other fields */
+    [data-testid="stNumberInputContainer"] {
+        border: 1px solid var(--border-strong);
+        border-radius: 12px;
+        background: var(--card);
+        overflow: hidden;
+        transition: border-color 150ms ease, box-shadow 150ms ease;
+    }
+    [data-testid="stNumberInputContainer"]:focus-within {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-ring);
+    }
+    [data-testid="stNumberInputContainer"] [data-baseweb="input"] {
+        border: none !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+    [data-testid="stNumberInputContainer"] button {
+        background: transparent !important;
+        border: none !important;
+        border-radius: 0 !important;
+        color: var(--text-secondary) !important;
+    }
+    @media (hover: hover) and (pointer: fine) {
+        [data-testid="stNumberInputContainer"] button:hover:not(:disabled) {
+            background: var(--surface) !important;
+            color: var(--accent-text) !important;
+        }
+    }
 
     /* ── Search box: pill with a label, a divider, and a search icon ──
        All three sit in the box's own flex row, centered together, instead of being
@@ -200,7 +279,7 @@ st.markdown("""
         border: 1px solid var(--hairline) !important;
         border-radius: 16px !important;
         box-shadow: var(--card-shadow);
-        padding: 14px !important;
+        padding: 20px !important;
         transition: border-color 150ms ease, box-shadow 200ms var(--ease-out);
     }
     @media (hover: hover) and (pointer: fine) {
@@ -240,7 +319,7 @@ st.markdown("""
     }
     /* Breathing room between stacked elements */
     [data-testid="stMainBlockContainer"] [data-testid="stVerticalBlock"] {
-        gap: 1.1rem;
+        gap: 1.25rem;
     }
 
     /* ── Typography: tracking and leading follow size ── */
@@ -270,6 +349,11 @@ st.markdown("""
     }
     /* Streamlit pulls the next element up under headings; let the block gap do the spacing */
     [data-testid="stHeading"] [data-testid="stMarkdownContainer"] {
+        margin-bottom: 0 !important;
+    }
+    /* Streamlit's -1rem cancels a closing paragraph's margin. Our HTML blocks (cards, tags)
+       have no closing paragraph, so the -1rem pulled the next card up to 2px away. */
+    .stApp [data-testid="stMarkdownContainer"]:not(:has(> p:last-child, > ul:last-child, > ol:last-child)) {
         margin-bottom: 0 !important;
     }
     [data-testid="stWidgetLabel"] p {
@@ -397,6 +481,62 @@ st.markdown("""
         overflow: hidden;
         background: var(--fill);
     }
+    /* A clickable thumbnail: an invisible button laid over it opens the video popup;
+       hover dims the image and shows a play badge */
+    [data-testid="stVerticalBlock"]:has(> [class*="st-key-play_"]) {
+        position: relative;
+    }
+    [class*="st-key-play_"] {
+        position: absolute !important;
+        inset: 0;
+        z-index: 2;
+    }
+    [class*="st-key-play_"].stElementContainer .stButton {
+        position: absolute !important;
+        inset: 0 !important;
+    }
+    [class*="st-key-play_"].stElementContainer .stButton,
+    [class*="st-key-play_"].stElementContainer .stButton div,
+    [class*="st-key-play_"].stElementContainer .stButton button[kind] {
+        width: 100% !important;
+        height: 100% !important;
+    }
+    [class*="st-key-play_"].stElementContainer .stButton button[kind] {
+        min-height: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+        border-radius: 12px !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        color: transparent !important;
+        cursor: pointer;
+    }
+    [class*="st-key-play_"].stElementContainer .stButton button[kind] p { opacity: 0; }
+    [data-testid="stVerticalBlock"]:has(> [class*="st-key-play_"]) .bg-image {
+        transition: transform 200ms var(--ease-out);
+    }
+    [data-testid="stVerticalBlock"]:has(> [class*="st-key-play_"]) .thumb::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+            url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Ccircle cx='24' cy='24' r='22' fill='white' fill-opacity='0.92'/%3E%3Cpath d='M20 16.5v15l12-7.5z' fill='%237B6FDF'/%3E%3C/svg%3E")
+            center / 44px no-repeat,
+            rgba(26, 22, 37, 0.28);
+        opacity: 0;
+        transition: opacity 160ms ease;
+    }
+    @media (hover: hover) and (pointer: fine) {
+        [data-testid="stVerticalBlock"]:has(> [class*="st-key-play_"]:hover) .thumb::after { opacity: 1; }
+        [data-testid="stVerticalBlock"]:has(> [class*="st-key-play_"]:hover) .bg-image { transform: scale(1.03); }
+    }
+    [data-testid="stVerticalBlock"]:has(> [class*="st-key-play_"] button:focus-visible) .thumb {
+        box-shadow: 0 0 0 3px var(--accent-ring);
+    }
+    @media (prefers-reduced-motion: reduce) {
+        [data-testid="stVerticalBlock"]:has(> [class*="st-key-play_"]) .bg-image,
+        [data-testid="stVerticalBlock"]:has(> [class*="st-key-play_"]) .thumb::after { transition: none; }
+    }
     .thumb::before {
         content: "▶";
         position: absolute;
@@ -509,6 +649,33 @@ st.markdown("""
         font-size: 0.8rem;
         color: var(--text-secondary);
     }
+    .loading-hint strong {
+        margin-right: 6px;
+        font-weight: 700;
+        color: var(--text);
+    }
+    /* Live elapsed counter (CSS only: the overlay is markdown, no JS). Browsers without
+       @property leave --eta-on unset, so the var() fallback 0 collapses the span and
+       only the static estimate shows. */
+    @property --eta-sec { syntax: '<integer>'; inherits: false; initial-value: 0; }
+    @property --eta-on { syntax: '<integer>'; inherits: false; initial-value: 1; }
+    .loading-eta-count {
+        display: inline-block;
+        overflow: hidden;
+        white-space: nowrap;
+        vertical-align: bottom;
+        max-width: calc(var(--eta-on, 0) * 12em);
+        counter-reset: eta var(--eta-sec);
+        animation: eta-tick 120s steps(120, end) forwards;
+    }
+    .loading-eta-count::after {
+        content: "· " counter(eta) "초 경과";
+        padding-right: 6px;
+    }
+    @keyframes eta-tick {
+        from { --eta-sec: 0; }
+        to { --eta-sec: 120; }
+    }
     @keyframes loading-spin {
         to { transform: rotate(360deg); }
     }
@@ -521,6 +688,7 @@ st.markdown("""
     @media (prefers-reduced-motion: reduce) {
         .loading-spinner { animation-duration: 2400ms; }
         .loading-overlay, .loading-modal { animation: none; }
+        .loading-eta-count { display: none; }
     }
 
     /* ── Step 2 cards (section / featured), after sazasaju.com/fortune ── */
@@ -529,8 +697,12 @@ st.markdown("""
         background: var(--card);
         border: 1px solid var(--hairline) !important;
         border-radius: 20px !important;
-        padding: 18px 18px 16px !important;
+        padding: 24px !important;
         box-shadow: var(--soft-shadow);
+    }
+    /* Inside the comment card: a tighter rhythm than between cards */
+    [data-testid="stVerticalBlockBorderWrapper"]:has(> div > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"] .comment-card-head) [data-testid="stVerticalBlock"] {
+        gap: 14px;
     }
     .section-head h4 {
         margin: 0 !important;
@@ -550,55 +722,79 @@ st.markdown("""
     .section-card .section-head {
         margin-bottom: 12px;
     }
-    .section-scroll {
-        max-height: 220px;
-        overflow-y: auto;
-        padding: 12px 14px;
-        border-radius: 12px;
-        background: var(--surface);
-        font-size: 0.9rem;
-        line-height: 1.75;
+    /* Video content: a plain white card, title then up to 7 lines that scroll */
+    .content-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+    .content-head h4 {
+        margin: 0 !important;
+        padding: 0 !important;
+        font-size: 1.15rem !important;
+        font-weight: 800 !important;
+        letter-spacing: -0.02em;
+        line-height: 1.4 !important;
         color: var(--text);
+    }
+    .content-tag {
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: var(--surface-strong);
+        color: var(--accent-text);
+        font-size: 0.72rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .content-text {
+        --line: 1.85em;
+        max-height: calc(var(--line) * 7);
+        overflow-y: auto;
+        padding-right: 6px;
+        font-size: 0.95rem;
+        line-height: var(--line);
+        color: var(--text-secondary);
         white-space: pre-wrap;
         overscroll-behavior: contain;
+        scrollbar-width: thin;
+        scrollbar-color: var(--border-strong) transparent;
+    }
+    .content-text::-webkit-scrollbar { width: 6px; }
+    .content-text::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; }
+    .content-text:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 3px var(--accent-ring);
+        border-radius: 8px;
     }
     .section-empty {
         font-size: 0.9rem;
         color: var(--text-secondary);
     }
+    /* The concern: a solid purple card, small light label over the quoted line, centered */
     .feature-card {
-        position: relative;
-        padding: 20px 22px;
+        padding: 22px 24px 24px;
         border-radius: 20px;
-        border: 1px solid #CFC8F7;
-        background:
-            radial-gradient(120% 90% at 8% 0, #F7F5FF 0%, rgba(247, 245, 255, 0) 60%),
-            linear-gradient(145deg, #EEEAFF, #CFC6FB);
+        background: var(--accent);
+        box-shadow: 0 10px 24px -12px var(--accent-shadow);
+        text-align: center;
     }
     .feature-label {
-        font-size: 0.85rem;
+        font-size: 0.8rem;
         font-weight: 700;
-        color: #5B50C0;
-        margin-bottom: 6px;
+        letter-spacing: 0.01em;
+        color: rgba(255, 255, 255, 0.78);
+        margin-bottom: 8px;
     }
     .feature-text {
-        font-size: 1.3rem;
+        font-size: 1.25rem;
         font-weight: 800;
-        line-height: 1.45;
+        line-height: 1.5;
         letter-spacing: -0.02em;
-        color: #4D42AD;
+        color: #fff;
         word-break: keep-all;
         overflow-wrap: anywhere;
-    }
-    @media (prefers-color-scheme: dark) {
-        .feature-card {
-            border-color: #4D4470;
-            background:
-                radial-gradient(120% 90% at 8% 0, rgba(155, 143, 255, 0.18) 0%, rgba(155, 143, 255, 0) 60%),
-                linear-gradient(145deg, #2D2550, #3A2F66);
-        }
-        .feature-label { color: #B8AFFF; }
-        .feature-text { color: #E4DFFF; }
+        text-wrap: balance;
     }
     .count-row {
         display: flex;
@@ -780,6 +976,13 @@ st.markdown("""
         font-size: 0.95rem;
         font-weight: 600;
         margin-bottom: 2px;
+    }
+    .profile-count {
+        margin-left: 4px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: var(--accent-text);
+        font-variant-numeric: tabular-nums;
     }
     .profile-popover-hint {
         font-size: 0.8rem;
@@ -1069,6 +1272,33 @@ def _thumb_html(url) -> str:
     return f'<div class="thumb">{_background_image(url)}</div>'
 
 
+def _valid_video_id(video_id: str) -> bool:
+    return bool(video_id) and re.fullmatch(r"[A-Za-z0-9_-]{6,20}", video_id) is not None
+
+
+@st.dialog("영상 보기", width="large")
+def show_video_dialog(video_id: str, title: str):
+    """Plays the video inside the app; a new-tab link is unreliable (the desktop app's
+    browser pane, for one, doesn't open page links in new tabs)."""
+    st.video(f"https://www.youtube.com/watch?v={video_id}", autoplay=True)
+    if title:
+        st.markdown(f'<div class="video-title full"><bdi>{title}</bdi></div>', unsafe_allow_html=True)
+    st.link_button(
+        "YouTube에서 열기",
+        f"https://www.youtube.com/watch?v={video_id}",
+        icon=":material/open_in_new:",
+        use_container_width=True,
+    )
+
+
+def _thumbnail(url, video_id: str, title: str, key: str):
+    """The thumbnail; with a valid video id it is clickable and plays the video in a popup."""
+    st.markdown(_thumb_html(url), unsafe_allow_html=True)
+    if _valid_video_id(video_id):
+        if st.button("영상 보기", key=f"play_{key}", help="영상 보기"):
+            show_video_dialog(video_id, title)
+
+
 def _video_meta(*parts) -> str:
     return " &middot; ".join(p for p in parts if p)
 
@@ -1076,9 +1306,17 @@ def _video_meta(*parts) -> str:
 # ---------------------------------------------------------------------------
 # Google login
 # ---------------------------------------------------------------------------
+
+
 def _google_login_button(location: str):
     if browser_automation.google_login_status():
         st.button("로그인 진행 중…", key=f"google_login_{location}", use_container_width=True, disabled=True)
+        return
+    if len(st.session_state.profiles_list) >= config.max_accounts():
+        st.button(
+            f"계정은 최대 {config.max_accounts()}개까지 연결할 수 있어요",
+            key=f"google_login_{location}", use_container_width=True, disabled=True,
+        )
         return
     if st.button(
         "Google 계정으로 로그인",
@@ -1097,7 +1335,8 @@ def _google_login_button(location: str):
         st.rerun()
 
 
-def _save_google_account(account: dict):
+def _save_google_account(account: dict) -> bool:
+    """Add or refresh an account. False when it is new and the limit is already reached."""
     profiles = st.session_state.profiles_list
     for i, profile in enumerate(profiles):
         if account["email"] and profile.get("email", "").lower() == account["email"].lower():
@@ -1105,8 +1344,12 @@ def _save_google_account(account: dict):
             profiles[i] = account
             break
     else:
+        if len(profiles) >= config.max_accounts():
+            config.remove_managed_profile(account.get("path", ""))
+            return False
         profiles.append(account)
     config.save_profiles(profiles)
+    return True
 
 
 def _finish_google_login():
@@ -1122,8 +1365,12 @@ def _finish_google_login():
             "warning", "로그인이 확인되지 않아 계정을 연결하지 않았습니다. 로그인한 뒤 Chrome 창을 닫아주세요."
         )
         return
-    _save_google_account(account)
     label = _plain_md(account["name"] or account["email"])
+    if not _save_google_account(account):
+        st.session_state.login_notice = (
+            "warning", f"계정은 최대 {config.max_accounts()}개까지 연결할 수 있어 {label} 계정은 연결하지 않았습니다."
+        )
+        return
     st.session_state.login_notice = ("toast", f"{label} 계정이 연결되었습니다.")
 
 
@@ -1139,6 +1386,111 @@ def _google_login_watcher():
         if st.button("취소", key="cancel_google_login", use_container_width=True):
             browser_automation.cancel_google_login()
             st.rerun()
+
+
+@st.dialog("설정")
+def show_api_settings_dialog(reason: str | None = None):
+    """Comment rules, daily limit, and the YouTube/AI keys — all saved to settings.yaml (git-ignored)."""
+    if reason:
+        st.info(reason)
+
+    st.markdown('<div class="settings-section">댓글 규칙</div>', unsafe_allow_html=True)
+    brand = st.text_input(
+        "브랜드 이름", value=config.brand_name(), key="set_brand",
+        help="댓글에서 호기심을 유도할 곳의 이름",
+    )
+    min_col, max_col, daily_col = st.columns(3)
+    with min_col:
+        min_chars = st.number_input("최소 글자 수", min_value=1, max_value=500,
+                                    value=config.comment_min_chars() or 40, step=5, key="set_min_chars")
+    with max_col:
+        max_chars = st.number_input("최대 글자 수", min_value=1, max_value=500,
+                                    value=config.comment_max_chars() or 120, step=5, key="set_max_chars")
+    with daily_col:
+        daily_max = st.number_input("하루 댓글 상한", min_value=1, max_value=100,
+                                    value=config.daily_max_comments() or 10, step=1, key="set_daily_max")
+
+    st.markdown('<div class="settings-section">YouTube</div>', unsafe_allow_html=True)
+    youtube_key = st.text_input(
+        "YouTube Data API 키",
+        value=config.youtube_api_key(),
+        type="password",
+        key="set_youtube_key",
+        help="Google Cloud Console에서 YouTube Data API v3를 켠 뒤 만든 API 키",
+    )
+    st.caption("[Google Cloud Console에서 키 만들기](https://console.cloud.google.com/apis/credentials)")
+
+    st.markdown('<div class="settings-section">댓글을 쓸 AI</div>', unsafe_allow_html=True)
+    providers = list(config.AI_PROVIDERS)
+    current = config.ai_provider()
+    provider = st.selectbox(
+        "AI 서비스",
+        providers,
+        index=providers.index(current),
+        format_func=lambda p: config.AI_PROVIDERS[p]["label"],
+        key="set_ai_provider",
+    )
+    info = config.AI_PROVIDERS[provider]
+    ai_key = st.text_input(
+        f"{info['label']} API 키",
+        value=config.ai_key(provider),
+        type="password",
+        key=f"set_ai_key_{provider}",
+    )
+    model = st.text_input(
+        "모델",
+        value=config.ai_model(provider),
+        key=f"set_ai_model_{provider}",
+        placeholder="비워두면 자동 선택",
+        help="비워두면 이 서비스의 현재 모델 목록에서 자동으로 고릅니다. 특정 모델을 쓰려면 모델 ID를 입력하세요.",
+    )
+    base_url = ""
+    if info.get("base_url_editable"):
+        base_url = st.text_input(
+            "서버 주소",
+            value=config.ai_base_url(provider),
+            key=f"set_ai_base_url_{provider}",
+            help="OpenAI 호환 API의 /v1 주소",
+        )
+    if info.get("note"):
+        st.caption(info["note"])
+    st.caption(f"[{info['label']} 키 발급 페이지]({info['key_url']})")
+
+    if st.button("저장", type="primary", use_container_width=True, icon=":material/check:", key="save_settings"):
+        if not brand.strip():
+            st.error("브랜드 이름을 입력해주세요.")
+            return
+        if min_chars > max_chars:
+            st.error("최소 글자 수가 최대 글자 수보다 클 수 없습니다.")
+            return
+        settings = config.load_settings()
+        settings["comment"] = {**(settings.get("comment") or {}),
+                               "min_chars": int(min_chars), "max_chars": int(max_chars), "brand": brand.strip()}
+        settings["limits"] = {**(settings.get("limits") or {}), "daily_max_comments": int(daily_max)}
+        api = settings.setdefault("api", {})
+        api["youtube_api_key"] = youtube_key.strip()
+        api["ai_provider"] = provider
+        api.setdefault("ai_keys", {})[provider] = ai_key.strip()
+        api.setdefault("ai_models", {})[provider] = model.strip()
+        if info.get("base_url_editable"):
+            api.setdefault("ai_base_urls", {})[provider] = base_url.strip()
+        config.save_settings(settings)
+        st.session_state.login_notice = ("toast", "설정을 저장했습니다.")
+        st.rerun()
+
+
+def _require_youtube_key() -> bool:
+    if config.youtube_api_key():
+        return True
+    show_api_settings_dialog("YouTube API 키를 등록해야 영상을 불러올 수 있어요.")
+    return False
+
+
+def _require_ai_key() -> bool:
+    if config.ai_ready():
+        return True
+    show_api_settings_dialog("AI API 키를 등록해야 영상 속 고민을 분석하고 댓글을 만들 수 있어요.")
+    return False
 
 
 @st.dialog("로그인이 필요합니다")
@@ -1157,7 +1509,11 @@ if "profiles_list" not in st.session_state:
 _profiles_list = st.session_state.profiles_list
 _profile_count = len(_profiles_list)
 
-_title_col, _profile_col = st.columns([6, 1])
+_title_col, _settings_col, _profile_col = st.columns([6, 1, 1])
+with _settings_col:
+    if st.button("설정", key="open_settings", icon=":material/settings:", use_container_width=True,
+                 help="YouTube·AI API 키와 사용할 AI를 설정합니다"):
+        show_api_settings_dialog()
 with _title_col:
     st.markdown(
         '<div class="app-header">'
@@ -1169,9 +1525,10 @@ with _profile_col:
     profiles_list = _profiles_list
     with st.popover(f"👤 {_profile_count}", use_container_width=True):
         st.markdown(
-            '<div class="profile-popover-header">Google 계정 관리</div>'
+            f'<div class="profile-popover-header">Google 계정 관리 '
+            f'<span class="profile-count">{_profile_count} / {config.max_accounts()}</span></div>'
             '<div class="profile-popover-hint">'
-            '댓글 게시에 사용할 Google 계정을 연결하세요.<br>'
+            f'댓글 게시에 사용할 Google 계정을 최대 {config.max_accounts()}개까지 연결하세요.<br>'
             '버튼을 누르면 Chrome에서 Google 로그인 페이지가 열립니다.'
             '</div>',
             unsafe_allow_html=True,
@@ -1244,7 +1601,7 @@ with _profile_col:
 
 # Today's comment count / daily limit
 posted_today = database.today_count()
-daily_max = config.DAILY_MAX_COMMENTS
+daily_max = config.daily_max_comments()
 remaining = max(0, daily_max - posted_today)
 
 if remaining == 0:
@@ -1357,9 +1714,49 @@ def _select_video(video: dict):
     go_to_step(2)
 
 
-def _loading_overlay(placeholder, message: str, stage: int, stages: int = 2):
+_GEN_TIMES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "gen_times.json")
+
+
+def _load_gen_times() -> list:
+    """Recorded step-2 load durations (seconds); best effort, empty on any error."""
+    try:
+        with open(_GEN_TIMES_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        return [float(x) for x in data if isinstance(x, (int, float)) and x > 0][-10:]
+    except Exception:
+        return []
+
+
+def _record_gen_time(seconds: float):
+    """Keep the last 10 successful step-2 load durations in data/gen_times.json."""
+    try:
+        times = (_load_gen_times() + [round(seconds)])[-10:]
+        os.makedirs(os.path.dirname(_GEN_TIMES_PATH), exist_ok=True)
+        with open(_GEN_TIMES_PATH, "w", encoding="utf-8") as f:
+            json.dump(times, f)
+    except Exception:
+        pass
+
+
+def _estimate_seconds(times: list) -> int:
+    """Median of past durations clamped to 5..60 s; 20 s with no history."""
+    if not times:
+        return 20
+    return int(min(60, max(5, round(statistics.median(times)))))
+
+
+def _loading_overlay(
+    placeholder, message: str, stage: int, stages: int = 2, estimate: int | None = None, elapsed: float = 0.0
+):
     """A centered popup over the page while step 2 loads. While it is up, the previous
-    screen's leftover (stale) elements are hidden instead of showing through, faded."""
+    screen's leftover (stale) elements are hidden instead of showing through, faded.
+    The elapsed counter ticks in CSS; `elapsed` (seconds since the load began) becomes a
+    negative animation-delay so a re-render continues the count instead of restarting it."""
+    if estimate is None:
+        estimate = _estimate_seconds(_load_gen_times())
+    estimate = int(estimate)
+    elapsed = max(0.0, float(elapsed))
+    eta = f'<span class="loading-eta-count" aria-hidden="true" style="animation-delay: {-elapsed:.2f}s"></span>'
     dots = "".join(
         f'<span class="loading-dot{" on" if i <= stage else ""}"></span>' for i in range(1, stages + 1)
     )
@@ -1369,7 +1766,7 @@ def _loading_overlay(placeholder, message: str, stage: int, stages: int = 2):
         f'<div class="loading-spinner" aria-hidden="true"></div>'
         f'<div class="loading-title">{html.escape(message)}</div>'
         f'<div class="loading-steps">{dots}<span>{stage} / {stages}</span></div>'
-        f'<p class="loading-hint">보통 10~30초 걸려요</p>'
+        f'<p class="loading-hint"><strong>예상시간 약 {estimate}초</strong>{eta}<span>(보통 10~30초 걸려요)</span></p>'
         f"</div></div>",
         unsafe_allow_html=True,
     )
@@ -1405,8 +1802,8 @@ if current == 1:
     )
 
     if search_clicked:
-        if not config.YOUTUBE_API_KEY:
-            st.error("YouTube API 키가 설정되지 않았습니다. .env 파일을 확인해주세요.")
+        if not _require_youtube_key():
+            pass
         elif not keyword.strip():
             st.warning("검색 키워드를 입력해주세요.")
         else:
@@ -1449,8 +1846,8 @@ if current == 1:
             key="url_input",
         )
         if st.button("URL로 불러오기", use_container_width=True, key="btn_url"):
-            if not config.YOUTUBE_API_KEY:
-                st.error("YouTube API 키가 설정되지 않았습니다.")
+            if not _require_youtube_key():
+                pass
             elif not url_input.strip():
                 st.warning("URL을 입력해주세요.")
             else:
@@ -1459,6 +1856,8 @@ if current == 1:
                     st.error("유효한 YouTube URL이 아닙니다.")
                 elif vid in database.get_posted_video_ids():
                     st.error("이미 댓글을 게시한 영상이라 선택할 수 없습니다.")
+                elif not _require_ai_key():
+                    pass
                 elif not st.session_state.profiles_list:
                     show_login_required_dialog()
                 else:
@@ -1507,7 +1906,7 @@ if current == 1:
             with st.container(border=True):
                 c_img, c_info = st.columns([1, 3])
                 with c_img:
-                    st.markdown(_thumb_html(thumb), unsafe_allow_html=True)
+                    _thumbnail(thumb, video.get("videoId", ""), title, f"{cur_page}_{idx}")
                 with c_info:
                     views_text = (
                         f"조회수 {youtube_api.format_view_count(video.get('viewCount', '0'))}"
@@ -1541,7 +1940,9 @@ if current == 1:
                             key=f"select_{cur_page}_{idx}",
                             type="primary",
                         ):
-                            if st.session_state.profiles_list:
+                            if not _require_ai_key():
+                                pass
+                            elif st.session_state.profiles_list:
                                 _select_video(video)
                             else:
                                 show_login_required_dialog()
@@ -1652,7 +2053,7 @@ elif current == 2:
 
     col_thumb, col_info = st.columns([1, 3])
     with col_thumb:
-        st.markdown(_thumb_html(thumb), unsafe_allow_html=True)
+        _thumbnail(thumb, video_id, v_title, "selected")
     with col_info:
         v_meta = _video_meta(
             f"<bdi>{v_channel}</bdi>" if v_channel else "",
@@ -1672,8 +2073,19 @@ elif current == 2:
     need_comment = st.session_state.ai_result is None and not st.session_state.analysis_error
     if need_content or need_comment:
         overlay = st.empty()
+        # The start time lives in session_state so an interrupted run that restarts the same
+        # video's load keeps counting from the original start rather than from zero.
+        started = st.session_state.get("_load_started")
+        if not started or started[0] != video_id:
+            started = (video_id, time.monotonic())
+            st.session_state["_load_started"] = started
+        load_started = started[1]
+        estimate = _estimate_seconds(_load_gen_times())
         if need_content:
-            _loading_overlay(overlay, "영상 자막을 불러오는 중", 1)
+            _loading_overlay(
+                overlay, "영상 자막을 불러오는 중", 1,
+                estimate=estimate, elapsed=time.monotonic() - load_started,
+            )
             transcript = None
             try:
                 transcript = youtube_api.get_transcript(video_id)
@@ -1691,7 +2103,10 @@ elif current == 2:
             }
             st.session_state.analysis = analysis
 
-        _loading_overlay(overlay, "영상 속 고민을 분석하고 댓글을 쓰는 중", 2)
+        _loading_overlay(
+            overlay, "영상 속 고민을 분석하고 댓글을 쓰는 중", 2,
+            estimate=estimate, elapsed=time.monotonic() - load_started,
+        )
         try:
             result = ai_comment.generate_comment(
                 title=sv.get("title", ""),
@@ -1701,7 +2116,14 @@ elif current == 2:
             )
         except Exception as e:
             config.log_error("generate_comment", e, f"videoId={video_id}")
+            st.session_state.analysis_error_kind = (
+                "quota" if isinstance(e, ai_comment.RateLimitError) else "other"
+            )
             result = None
+        if result and need_content:
+            # Only full loads (both stages) are recorded, so retries don't skew the estimate.
+            _record_gen_time(time.monotonic() - load_started)
+        st.session_state.pop("_load_started", None)
         if result:
             st.session_state.ai_result = result
             st.session_state.edited_comment = result.get("comment", "")
@@ -1715,28 +2137,43 @@ elif current == 2:
     transcript = analysis["transcript"]
     description = (sv.get("description") or "").strip()
     if transcript:
-        content_sub, content_text = "영상 자막에서 가져온 내용이에요", transcript
+        content_tag, content_text = "", transcript
     elif description:
-        content_sub, content_text = "자막이 없어 영상 설명을 대신 보여드려요", description
+        # Only the fallback is labeled; captions are the normal case
+        content_tag, content_text = '<span class="content-tag">자막 없음 · 영상 설명</span>', description
     else:
-        content_sub, content_text = "자막과 설명이 없어 제목으로 분석해요", ""
+        content_tag, content_text = "", ""
     content_body = (
-        f'<div class="section-scroll"><bdi>{html.escape(content_text[:6000])}</bdi></div>'
+        f'<div class="content-text" tabindex="0"><bdi>{html.escape(content_text[:6000])}</bdi></div>'
         if content_text
-        else '<div class="section-empty">표시할 영상 내용이 없습니다.</div>'
+        else '<div class="section-empty">표시할 영상 내용이 없어 제목으로 분석했어요.</div>'
     )
     st.markdown(
-        f'<section class="section-card">'
-        f'<div class="section-head"><h4>영상 내용</h4><p>{content_sub}</p></div>'
+        f'<section class="section-card content-card">'
+        f'<div class="content-head"><h4>영상 내용</h4>{content_tag}</div>'
         f"{content_body}</section>",
         unsafe_allow_html=True,
     )
 
     if st.session_state.analysis_error:
-        st.error("댓글을 만드는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.")
-        if st.button("다시 시도", type="primary", icon=":material/refresh:", key="retry_analysis"):
-            st.session_state.analysis_error = False
-            st.rerun()
+        if st.session_state.get("analysis_error_kind") == "quota":
+            label = config.AI_PROVIDERS[config.ai_provider()]["label"]
+            st.error(
+                f"{label}의 사용 한도에 도달했어요. 한도가 풀린 뒤 다시 시도하거나, "
+                "설정에서 다른 AI 서비스·키로 바꿔주세요."
+            )
+        else:
+            st.error("댓글을 만드는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.")
+        retry_col, settings_col = st.columns(2)
+        with retry_col:
+            if st.button("다시 시도", type="primary", icon=":material/refresh:", key="retry_analysis",
+                         use_container_width=True):
+                st.session_state.analysis_error = False
+                st.rerun()
+        with settings_col:
+            if st.button("설정 열기", icon=":material/settings:", key="error_open_settings",
+                         use_container_width=True):
+                show_api_settings_dialog()
 
     if st.session_state.ai_result:
         ai = st.session_state.ai_result
@@ -1744,8 +2181,8 @@ elif current == 2:
         # -- 3. The concern, as the page's featured card --
         st.markdown(
             f'<section class="feature-card">'
-            f'<div class="feature-label">영상 속 고민</div>'
-            f'<div class="feature-text"><bdi>{html.escape(ai.get("concern", ""))}</bdi></div>'
+            f'<div class="feature-label">영상 속 고민 한 줄</div>'
+            f'<div class="feature-text">“<bdi>{html.escape(ai.get("concern", "").strip().strip(chr(34)))}</bdi>”</div>'
             f"</section>",
             unsafe_allow_html=True,
         )
@@ -1767,15 +2204,13 @@ elif current == 2:
             st.session_state.edited_comment = edited
 
             char_count = len(edited)
-            is_valid = config.COMMENT_MIN_CHARS <= char_count <= config.COMMENT_MAX_CHARS
-            limits = f"{config.COMMENT_MIN_CHARS}~{config.COMMENT_MAX_CHARS}자"
+            is_valid = config.comment_min_chars() <= char_count <= config.comment_max_chars()
+            limits = f"{config.comment_min_chars()}~{config.comment_max_chars()}자"
             st.markdown(
                 f'<div class="count-row"><span class="count-chip {"ok" if is_valid else "bad"}">'
                 f"{char_count}자</span><span>{limits} 사이로 맞춰주세요</span></div>",
                 unsafe_allow_html=True,
             )
-            if ai.get("warning"):
-                st.warning(_plain_md(ai["warning"]))
 
             regen_col, confirm_col = st.columns(2)
             with regen_col:
@@ -1792,14 +2227,6 @@ elif current == 2:
             if confirm_clicked and not is_valid:
                 st.error(f"댓글은 {limits}여야 합니다. 현재 {char_count}자입니다.")
 
-        with st.expander("AI 분석 근거", expanded=False):
-            st.markdown(f"**분석 이유:** {_plain_md(ai.get('reasoning', ''))}")
-            pop_comments = analysis["popular_comments"]
-            if pop_comments:
-                st.markdown("**참고한 인기 댓글:**")
-                for pc in pop_comments[:5]:
-                    likes = pc.get("likeCount", 0)
-                    st.markdown(f"- 좋아요 {likes:,} · {_plain_md(pc.get('text', '')[:80])}")
 
         if regenerate_clicked:
             st.session_state.ai_result = None
@@ -1865,7 +2292,7 @@ elif current == 3:
 
     can_post, can_post_msg = database.can_post(video_id)
     today_posted = database.today_count()
-    daily_limit = config.DAILY_MAX_COMMENTS
+    daily_limit = config.daily_max_comments()
     posts_remaining = max(0, daily_limit - today_posted)
     quota_ok = posts_remaining > 0
 
@@ -2030,30 +2457,63 @@ def _record_html(record: dict, profiles: list[dict]) -> str:
     )
 
 
-def _dialog_rows(rows_html: list[str], unit: str, empty_message: str):
+DIALOG_PAGE_SIZE = 10
+DIALOG_MAX_ROWS = 1000
+
+
+def _shift_dialog_page(page_key: str, delta: int):
+    st.session_state[page_key] += delta
+
+
+def _dialog_rows(prefix: str, selected: date, rows_html: list[str], unit: str, empty_message: str):
     if not rows_html:
         st.markdown(f'<div class="profile-empty-state">{empty_message}</div>', unsafe_allow_html=True)
         return
+
+    page_key, page_date_key = f"{prefix}_page", f"{prefix}_page_date"
+    if st.session_state.get(page_date_key) != selected:
+        st.session_state[page_date_key] = selected
+        st.session_state[page_key] = 1
+    total_pages = (len(rows_html) - 1) // DIALOG_PAGE_SIZE + 1
+    page = st.session_state[page_key] = min(st.session_state[page_key], total_pages)
+    start = (page - 1) * DIALOG_PAGE_SIZE
+    page_rows = rows_html[start:start + DIALOG_PAGE_SIZE]
+
     st.markdown(f'<div class="dialog-count">{len(rows_html):,}{unit}</div>', unsafe_allow_html=True)
-    # Only the rows scroll, so the date row stays reachable.
-    with st.container(height=min(440, 90 + 110 * len(rows_html)), border=False):
-        st.markdown("".join(rows_html), unsafe_allow_html=True)
+    # Only the rows scroll, so the date row and page buttons stay reachable.
+    with st.container(height=min(440, 90 + 110 * len(page_rows)), border=False):
+        st.markdown("".join(page_rows), unsafe_allow_html=True)
+
+    if total_pages > 1:
+        pag_prev, pag_info, pag_next = st.columns([1, 2, 1])
+        with pag_prev:
+            st.button(
+                "← 이전", key=f"{prefix}_page_prev", use_container_width=True, disabled=page <= 1,
+                on_click=_shift_dialog_page, args=(page_key, -1),
+            )
+        with pag_info:
+            st.markdown(f'<div class="pagination-info">{page} / {total_pages}</div>', unsafe_allow_html=True)
+        with pag_next:
+            st.button(
+                "다음 →", key=f"{prefix}_page_next", use_container_width=True, disabled=page >= total_pages,
+                on_click=_shift_dialog_page, args=(page_key, 1),
+            )
 
 
 @st.dialog("📋 게시 기록", width="large")
 def show_history_dialog():
     selected = _date_navigator("hist")
     profiles = config.load_profiles()
-    rows = [_record_html(r, profiles) for r in database.get_history_by_date(selected)]
-    _dialog_rows(rows, "건", "해당 날짜에 게시 기록이 없습니다.")
+    rows = [_record_html(r, profiles) for r in database.get_history_by_date(selected, limit=DIALOG_MAX_ROWS)]
+    _dialog_rows("hist", selected, rows, "건", "해당 날짜에 게시 기록이 없습니다.")
 
 
 @st.dialog("🔧 오류 로그", width="large")
 def show_error_log_dialog():
     selected = _date_navigator("log")
-    lines = reversed(config.read_error_log_by_date(selected))
+    lines = reversed(config.read_error_log_by_date(selected, limit=DIALOG_MAX_ROWS))
     rows = [f'<div class="log-line"><bdi>{html.escape(line)}</bdi></div>' for line in lines]
-    _dialog_rows(rows, "건", "해당 날짜에 기록된 오류가 없습니다.")
+    _dialog_rows("log", selected, rows, "건", "해당 날짜에 기록된 오류가 없습니다.")
 
 
 st.markdown("---")
@@ -2061,10 +2521,12 @@ _hist_col, _log_col = st.columns(2)
 with _hist_col:
     if st.button("📋 게시 기록", use_container_width=True, key="open_hist"):
         st.session_state.hist_date = date.today()
+        st.session_state.pop("hist_page_date", None)
         show_history_dialog()
 with _log_col:
     if st.button("🔧 오류 로그", use_container_width=True, key="open_log"):
         st.session_state.log_date = date.today()
+        st.session_state.pop("log_page_date", None)
         show_error_log_dialog()
 
 _render_scroll_anchor()

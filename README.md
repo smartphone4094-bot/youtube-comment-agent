@@ -40,21 +40,30 @@ pip install -r requirements.txt
 playwright install chromium
 ```
 
-### 3. 환경 변수 설정
+### 3. 설정 (`settings.yaml`)
 
-`.env.example`을 `.env`로 복사하고 API 키를 입력합니다:
+모든 설정은 프로젝트 폴더의 `settings.yaml` 한 파일에 저장됩니다. API 키와 계정이 들어 있어
+**git에 올라가지 않으며**(.gitignore), 코드에는 어떤 값도 하드코딩되어 있지 않습니다.
 
-```bash
-cp .env.example .env
+- 앱을 처음 실행하면 `settings.example.yaml`(견본)로 자동 생성됩니다.
+  예전 `.env` · `data/profiles.json` 값이 있으면 그대로 옮겨집니다.
+- 앱 상단 **설정** 버튼에서 브랜드 이름·글자 수·하루 댓글 상한, YouTube API 키,
+  AI 서비스(OpenRouter · Gemini · Claude · OpenAI)와 키·모델을 바꿀 수 있습니다.
+- 파일을 직접 고쳐도 다음 동작 때 바로 반영됩니다.
+
+```yaml
+profiles: [...]            # 앱에서 Google 로그인으로 연결한 계정 (최대 3개)
+comment: { min_chars: 40, max_chars: 120, brand: 운명원 }
+limits:  { daily_max_comments: 10, max_accounts: 3 }
+api:
+  youtube_api_key: ...
+  ai_provider: openrouter   # openrouter | gemini | anthropic | openai
+  ai_keys:   { openrouter: ..., gemini: ..., anthropic: ..., openai: ... }
+  ai_models: { openrouter: ..., gemini: ..., anthropic: ..., openai: ... }
 ```
 
-```env
-YOUTUBE_API_KEY=your_youtube_api_key
-ANTHROPIC_API_KEY=your_anthropic_api_key
-CHROME_PROFILE_1=C:/Users/사용자/AppData/Local/Google/Chrome/User Data/Profile 1
-CHROME_PROFILE_2=
-CHROME_PROFILE_3=
-```
+키 없이 **영상 불러오기**를 누르면 YouTube 키 입력 창이, AI 키 없이 영상을 **선택**하면
+AI 키 입력 창이 열립니다.
 
 ### 4. 크롬 프로필 설정
 
@@ -63,7 +72,7 @@ CHROME_PROFILE_3=
 3. 로그인 후 그 Chrome 창을 닫으면 계정이 자동으로 연결됩니다
 4. 계정마다 반복 (앱 전용 Chrome 프로필은 `%LOCALAPPDATA%/MarketingAIAgent/chrome_profiles`에 저장)
 
-> 기존 방식처럼 `.env`의 `CHROME_PROFILE_1~3`에 프로필 경로를 직접 적어도 됩니다 (`data/profiles.json`이 없을 때만 사용).
+> 연결한 계정은 `settings.yaml`의 `profiles`에 저장되며, 최대 3개까지 연결할 수 있습니다.
 
 ### 5. 실행
 

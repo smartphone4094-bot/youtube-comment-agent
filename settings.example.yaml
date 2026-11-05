@@ -1,0 +1,29 @@
+# 운명원 마케팅 AI에이전트 설정 예시 (git에 올라가는 견본 — 실제 키·계정은 넣지 마세요)
+# 앱을 처음 실행하면 이 견본으로 settings.yaml이 만들어지고,
+# 이전 .env · data/profiles.json · data/settings.json 값이 있으면 그대로 옮겨집니다.
+# settings.yaml은 API 키와 계정이 들어가므로 .gitignore로 커밋에서 빠집니다.
+
+profiles: []            # 앱에서 Google 로그인으로 연결한 계정 (최대 limits.max_accounts개)
+
+comment:
+  min_chars: 40
+  max_chars: 120
+  brand: 운명원
+
+limits:
+  daily_max_comments: 10
+  max_accounts: 3
+
+api:
+  youtube_api_key: ""
+  ai_provider: openrouter   # openrouter | gemini | anthropic | openai
+  ai_keys:
+    openrouter: ""
+    gemini: ""
+    anthropic: ""
+    openai: ""
+  ai_models:
+    openrouter: nvidia/nemotron-3.5-lightning:free
+    gemini: gemini-2.5-flash
+    anthropic: claude-opus-5-5
+    openai: gpt-5-mini

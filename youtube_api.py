@@ -12,7 +12,7 @@ import config
 
 def _get_service():
     """Build and return a YouTube API service client."""
-    return build("youtube", "v3", developerKey=config.YOUTUBE_API_KEY)
+    return build("youtube", "v3", developerKey=config.youtube_api_key())
 
 
 def search_videos(
