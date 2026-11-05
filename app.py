@@ -8,6 +8,7 @@ from datetime import date, timedelta
 from urllib.parse import quote
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 import ai_comment
 import browser_automation
@@ -178,6 +179,35 @@ st.markdown("""
     .video-posted {
         font-size: 0.85rem;
         color: var(--text-secondary);
+    }
+    /* Row buttons sit short at the bottom-right of the card instead of spanning it */
+    [class*="st-key-select_"],
+    [class*="st-key-resume_"] {
+        display: flex;
+        justify-content: flex-end;
+    }
+    [class*="st-key-select_"] .stButton,
+    [class*="st-key-resume_"] .stButton {
+        width: auto !important;
+        margin-left: auto;
+    }
+    /* Stretch the info column to the thumbnail's height so the button can sink to the bottom */
+    [data-testid="stColumn"]:has(> [data-testid="stVerticalBlockBorderWrapper"] > div > [data-testid="stVerticalBlock"] > :is([class*="st-key-select_"], [class*="st-key-resume_"])) {
+        align-self: stretch;
+    }
+    [data-testid="stColumn"]:has(> [data-testid="stVerticalBlockBorderWrapper"] > div > [data-testid="stVerticalBlock"] > :is([class*="st-key-select_"], [class*="st-key-resume_"])) > [data-testid="stVerticalBlockBorderWrapper"],
+    [data-testid="stColumn"]:has(> [data-testid="stVerticalBlockBorderWrapper"] > div > [data-testid="stVerticalBlock"] > :is([class*="st-key-select_"], [class*="st-key-resume_"])) > [data-testid="stVerticalBlockBorderWrapper"] > div,
+    [data-testid="stVerticalBlock"]:has(> :is([class*="st-key-select_"], [class*="st-key-resume_"])) {
+        height: 100%;
+    }
+    [class*="st-key-select_"],
+    [class*="st-key-resume_"] {
+        margin-top: auto;
+    }
+    [class*="st-key-select_"] button {
+        min-width: 88px;
+        padding-left: 20px !important;
+        padding-right: 20px !important;
     }
 
     /* ── Status badge ── */
@@ -829,6 +859,21 @@ def _reset_pagination():
     st.session_state.search_mode = ""
 
 
+def _scroll_to_top():
+    # The nonce changes the iframe's content so the script runs again on every page turn.
+    st.session_state.scroll_nonce = st.session_state.get("scroll_nonce", 0) + 1
+    components.html(
+        f"""<script>
+        // nonce {st.session_state.scroll_nonce}
+        const doc = window.parent.document;
+        doc.querySelectorAll('[data-testid="stMain"], [data-testid="stAppViewContainer"], section.main')
+            .forEach(el => el.scrollTo({{top: 0, behavior: "smooth"}}));
+        window.parent.scrollTo({{top: 0, behavior: "smooth"}});
+        </script>""",
+        height=0,
+    )
+
+
 def _select_video(video: dict):
     with st.spinner("상세 정보 로딩 중..."):
         try:
@@ -990,15 +1035,15 @@ if current == 1:
                         if st.button(
                             "선택됨 · 이어서 진행",
                             key=f"resume_{cur_page}_{idx}",
-                            use_container_width=True,
                             type="primary",
+                            icon=":material/arrow_forward:",
                         ):
                             go_to_step(2)
                     else:
                         if st.button(
                             "선택",
                             key=f"select_{cur_page}_{idx}",
-                            use_container_width=True,
+                            type="primary",
                         ):
                             if st.session_state.profiles_list:
                                 _select_video(video)
@@ -1006,6 +1051,9 @@ if current == 1:
                                 show_login_required_dialog()
 
                 st.divider()
+
+        if st.session_state.pop("scroll_to_top", False):
+            _scroll_to_top()
 
         # --- Pagination controls ---
         can_prev = cur_page > 1
@@ -1026,6 +1074,7 @@ if current == 1:
                     prev_cached = st.session_state.search_pages_cache.get(cur_page - 1)
                     if prev_cached:
                         st.session_state.videos = prev_cached
+                    st.session_state.scroll_to_top = True
                     st.rerun()
             with pag_info:
                 # totalResults is YouTube's estimate; the count corrects once the last page loads.
@@ -1043,6 +1092,7 @@ if current == 1:
                     key="page_next",
                 ):
                     next_page = cur_page + 1
+                    st.session_state.scroll_to_top = True
                     # Check cache first
                     if next_page in st.session_state.search_pages_cache:
                         st.session_state.search_current_page = next_page
