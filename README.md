@@ -70,12 +70,16 @@ Python 설치도, 프로그램 설치도 필요 없습니다. 필요한 패키�
 - YouTube Data API 키 ([Google Cloud Console](https://console.cloud.google.com/)에서 발급)
 - AI API 키 (Gemini / Claude / OpenRouter / OpenAI 중 하나 이상)
 
+**다운로드**: [Releases](https://github.com/smartphone4094-bot/youtube-comment-agent/releases/latest)에서 `MarketingAI.zip`
+
 **쓰는 법**
 1. `MarketingAI.zip`을 원하는 곳에 풀기 (바탕화면, USB, 한글 폴더 모두 가능)
 2. `MarketingAI\MarketingAI.exe` 더블클릭
 3. 검은 콘솔 창과 함께 프로그램 창(Chrome 앱 창)이 열림
 4. 상단 **설정**에서 YouTube 키와 AI 키 입력, 프로필 버튼에서 Google 계정 연결
 5. 끝낼 때는 프로그램 창을 닫으면 콘솔도 함께 종료
+
+처음 실행할 때 Windows가 "PC 보호" 경고를 띄우면 **추가 정보 → 실행**을 누르세요. 코드 서명이 없는 프로그램이라 나오는 경고입니다.
 
 **자동으로 생기는 파일** (모두 `MarketingAI.exe`와 같은 폴더)
 
