@@ -39,7 +39,7 @@ _ANGLES = (
     "요즘 마음 가는 상대와의 인연이 궁금함",
     "좋은 사람을 만날 시기가 궁금함",
     "친구에게 {brand} 이름을 들은 기억이 남 (이름을 들은 것까지만. 친구의 결과나 후기는 지어내지 말 것)",
-    "사주라도 봐야 하나 싶은 마음을 가볍게 웃으며 말함",
+    "사주라도 봐야 하나 싶은 마음 (농담처럼)",
     "연애가 안 풀리는 게 내 탓인지 사주 탓인지 궁금함",
 )
 _CANDIDATES = 3
@@ -135,8 +135,8 @@ span에는 고칠 문장 전체를 후보의 글자 그대로 적고, fix에는 
 JSON만 출력: {{"best": 후보번호, "problems": [{{"span": "어색한 문장", "fix": "고친 문장"}}]}}"""
 
 
-# A stalled call blocks the switch to the next service; normal calls take 1 to 10 seconds
-_CALL_TIMEOUT = 30
+# A stalled call blocks the switch to the next model; the slowest healthy calls seen took 22 seconds
+_CALL_TIMEOUT = 45
 
 
 def _post_json(url: str, body: dict, headers: dict, service: str) -> dict:
@@ -162,8 +162,12 @@ def _post_json(url: str, body: dict, headers: dict, service: str) -> dict:
             exc = error(f"{service} API 오류 ({e.code}): {err_body}")
             exc.retry_after = e.headers.get("Retry-After") if e.headers else None
             raise exc
+        except TimeoutError as e:  # one slow model says nothing about the service's other models
+            raise ServiceBusyError(f"{service} 응답 시간 초과 ({_CALL_TIMEOUT}초)") from e
         except urllib.error.URLError as e:
-            if attempt == 2 or isinstance(e.reason, TimeoutError):  # another wait would only add to it
+            if isinstance(e.reason, TimeoutError):
+                raise ServiceBusyError(f"{service} 응답 시간 초과 ({_CALL_TIMEOUT}초)") from e
+            if attempt == 2:
                 raise
             time.sleep(1.0 * (attempt + 1))
 
