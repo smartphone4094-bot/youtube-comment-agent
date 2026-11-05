@@ -56,18 +56,15 @@
 
 | 패키지 | 출처 | 라이선스 | 용도 |
 |--------|------|----------|------|
-| [im_not_ai](https://github.com/epoko77-ai/im_not_ai) | `vendor/im_not_ai/` | MIT | AI 텍스트 자연스러움 검증 룰북 |
+| im_not_ai (© 2026 epoko77-ai) | `vendor/im_not_ai/` | MIT | 댓글 윤문 단계에서 AI 말투 탐지 룰북(`quick-rules.md`) 참조 |
 
 ### MCP (Model Context Protocol)
 
-이 프로젝트의 개발 과정에서 [Claude Code](https://claude.com/claude-code)와 MCP 도구들을 활용했습니다.
+앱 자체는 MCP를 사용하지 않습니다. 개발 과정에서 [Claude Code](https://claude.com/claude-code)의 MCP 도구를 썼습니다.
 
 | MCP 서버 | 용도 |
 |----------|------|
-| Claude Code (Built-in Browser) | UI 검증·테스트 자동화 |
-| Claude Code (Terminal) | 개발 서버 실행·Git 작업 |
-
-> MCP(Model Context Protocol)는 [Anthropic](https://www.anthropic.com/)이 공개한 오픈 프로토콜로, AI 모델이 외부 도구·데이터 소스에 연결하는 표준 방식을 제공합니다. 사양은 [modelcontextprotocol.io](https://modelcontextprotocol.io/)에서 확인할 수 있으며, [Apache 2.0 라이선스](https://github.com/modelcontextprotocol/specification/blob/main/LICENSE)로 공개되어 있습니다.
+| Claude Browser (Claude Code 내장 브라우저) | 개발 서버 화면 확인·클릭 테스트 |
 
 ## 설치 및 실행
 
