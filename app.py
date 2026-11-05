@@ -101,6 +101,88 @@ st.markdown("""
     .stApp button [data-testid="stMarkdownContainer"] p {
         color: inherit !important;
     }
+    /* ── Brand mark: a bold, slanted 운 in the accent gradient ── */
+    .brand-mark {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 900;
+        font-style: normal;
+        line-height: 1;
+        letter-spacing: -0.04em;
+        transform: skewX(-9deg);
+        background: linear-gradient(160deg, #B8AFFF 0%, #9B8FFF 45%, #7B6FDF 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+    }
+    .app-title {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+    }
+    .app-title .brand-mark {
+        font-size: 1.15em;
+        padding-right: 0.05em;
+    }
+    .app-title a {
+        display: none !important;
+    }
+
+    /* ── Search box: pill with the brand mark, a divider, and a search icon ── */
+    .st-key-keyword_input [data-baseweb="input"] {
+        position: relative;
+        min-height: 52px;
+        border-radius: 9999px !important;
+        padding-left: 3.6rem;
+        padding-right: 2.8rem;
+        box-shadow: 0 3px 12px rgba(138, 124, 240, 0.1);
+    }
+    .st-key-keyword_input [data-baseweb="input"]::before {
+        content: "운";
+        position: absolute;
+        left: 1.15rem;
+        top: 50%;
+        transform: translateY(-50%) skewX(-9deg);
+        padding-right: 0.8rem;
+        font-size: 1.35rem;
+        font-weight: 900;
+        line-height: 1;
+        background: linear-gradient(160deg, #B8AFFF 0%, #9B8FFF 45%, #7B6FDF 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        pointer-events: none;
+    }
+    .st-key-keyword_input [data-baseweb="input"]::after {
+        content: "";
+        position: absolute;
+        right: 1.1rem;
+        top: 50%;
+        width: 20px;
+        height: 20px;
+        transform: translateY(-50%);
+        background: var(--accent-text);
+        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") center / contain no-repeat;
+        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") center / contain no-repeat;
+        pointer-events: none;
+    }
+    /* The divider between the mark and the text */
+    .st-key-keyword_input [data-baseweb="input"] > div:first-child {
+        border-left: 1.5px solid var(--border-strong) !important;
+        border-radius: 0 !important;
+        margin-block: 14px;
+    }
+    .st-key-keyword_input input {
+        padding-left: 0.85rem !important;
+        font-size: 1rem !important;
+        font-weight: 500;
+    }
+    .st-key-keyword_input input::placeholder {
+        color: var(--text-secondary);
+        opacity: 1;
+    }
+
     [data-testid="stDecoration"] {
         background-image: linear-gradient(90deg, #9B8FFF, #FFB8D0) !important;
     }
@@ -879,7 +961,11 @@ def show_login_required_dialog():
 if "profiles_list" not in st.session_state:
     st.session_state.profiles_list = config.load_profiles()
 
-st.title("마케팅AI 에이전트 (운명원)")
+st.markdown(
+    '<h1 class="app-title"><span class="brand-mark" aria-hidden="true">운</span>'
+    '<span>마케팅AI 에이전트 (운명원)</span></h1>',
+    unsafe_allow_html=True,
+)
 
 # Profile popover placed next to the daily comment badge below the title
 _profiles_list = st.session_state.profiles_list
@@ -1076,8 +1162,9 @@ if current == 1:
     keyword = st.text_input(
         "검색 키워드",
         value=st.session_state.search_keyword,
-        placeholder="예: 연애, 결혼, 소개팅 ...",
+        placeholder="연애, 결혼, 소개팅 검색",
         key="keyword_input",
+        label_visibility="collapsed",
     )
 
     search_clicked = st.button(
