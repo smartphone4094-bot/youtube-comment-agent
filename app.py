@@ -105,29 +105,28 @@ st.markdown("""
     .app-header {
         display: flex;
         align-items: center;
-        gap: 14px;
+        gap: 12px;
         margin-bottom: 0.5rem;
     }
+    /* About the title's height, one gradient and one soft shadow */
     .brand-tile {
         flex-shrink: 0;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 56px;
-        height: 56px;
-        border-radius: 16px;
-        background: linear-gradient(145deg, #A99FFF 0%, #8B7FEF 50%, #6F62D6 100%);
-        box-shadow: 0 10px 24px -10px rgba(123, 111, 223, 0.7),
-            inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -2px 6px rgba(60, 40, 140, 0.18);
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        background: linear-gradient(145deg, #9B8FFF 0%, #7B6FDF 100%);
+        box-shadow: 0 6px 16px -8px rgba(123, 111, 223, 0.6);
     }
     .brand-tile > span {
         color: #fff;
-        font-size: 1.75rem;
-        font-weight: 900;
+        font-size: 1.25rem;
+        font-weight: 800;
         line-height: 1;
         letter-spacing: -0.04em;
-        transform: skewX(-9deg);
-        text-shadow: 0 1px 2px rgba(60, 40, 140, 0.25);
+        transform: skewX(-8deg);
     }
     .app-header-text {
         min-width: 0;
@@ -136,15 +135,15 @@ st.markdown("""
         margin: 0 !important;
         padding: 0 !important;
         font-size: clamp(1.6rem, 4.6vw, 2.25rem) !important;
-        font-weight: 800 !important;
+        font-weight: 700 !important;
         letter-spacing: -0.03em;
     }
     .app-title a {
         display: none !important;
     }
     @media (max-width: 480px) {
-        .brand-tile { width: 46px; height: 46px; border-radius: 14px; }
-        .brand-tile > span { font-size: 1.45rem; }
+        .brand-tile { width: 34px; height: 34px; border-radius: 10px; }
+        .brand-tile > span { font-size: 1.05rem; }
     }
 
     /* ── Search box: pill with the brand mark, a divider, and a search icon ── */
@@ -245,7 +244,7 @@ st.markdown("""
     [data-testid="stMainBlockContainer"] {
         max-width: 960px;
         margin-inline: auto;
-        padding-top: 3rem !important;
+        padding-top: 2.25rem !important;
         padding-bottom: 6rem !important;
     }
     /* Breathing room between stacked elements */
