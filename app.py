@@ -45,7 +45,7 @@ if "--ui-dev" in sys.argv:
 # ---------------------------------------------------------------------------
 # Custom CSS
 # ---------------------------------------------------------------------------
-with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "styles.css"), encoding="utf-8") as _css:
+with open(config.resource_path("styles.css"), encoding="utf-8") as _css:
     st.markdown(f"<style>\n{_css.read()}</style>", unsafe_allow_html=True)
 
 
@@ -545,7 +545,7 @@ def _select_video(video: dict):
     go_to_step(2)
 
 
-_GEN_TIMES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "gen_times.json")
+_GEN_TIMES_PATH = config.user_path("data", "gen_times.json")
 
 
 def _load_gen_times() -> list:

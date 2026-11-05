@@ -3,6 +3,7 @@ import json
 import os
 import re
 import shutil
+import sys
 import uuid
 from datetime import datetime
 
@@ -14,9 +15,28 @@ import yaml
 #   limits   - daily_max_comments, max_accounts   api - YouTube key, AI service, keys, models
 # settings.example.yaml (committed, no secrets) seeds it on first run.
 # ---------------------------------------------------------------------------
-_ROOT = os.path.dirname(os.path.abspath(__file__))
-SETTINGS_PATH = os.path.join(_ROOT, "settings.yaml")
-_EXAMPLE_PATH = os.path.join(_ROOT, "settings.example.yaml")
+_SOURCE_DIR = os.path.dirname(os.path.abspath(__file__))
+_FROZEN = getattr(sys, "frozen", False)
+
+
+def resource_path(*parts: str) -> str:
+    """Read-only files shipped with the app (styles.css, settings.example.yaml, vendor/...).
+
+    From source: the project folder. In the PyInstaller build: the unpacked bundle (sys._MEIPASS).
+    """
+    base = getattr(sys, "_MEIPASS", _SOURCE_DIR) if _FROZEN else _SOURCE_DIR
+    return os.path.join(base, *parts)
+
+
+def user_path(*parts: str) -> str:
+    """Files the app writes (settings.yaml, data/, logs). From source: the project folder.
+    In the PyInstaller build: the folder holding the .exe, so they are created next to it."""
+    base = os.path.dirname(os.path.abspath(sys.executable)) if _FROZEN else _SOURCE_DIR
+    return os.path.join(base, *parts)
+
+
+SETTINGS_PATH = user_path("settings.yaml")
+_EXAMPLE_PATH = resource_path("settings.example.yaml")
 
 # Service metadata only (names and where to get a key) — keys and models are settings.
 # "prefer": name fragments ranked for auto-selection from the service's live model list.
@@ -75,14 +95,14 @@ def _legacy_values() -> dict:
     """One-time carry-over from the old .env, data/profiles.json and data/settings.json."""
     from dotenv import dotenv_values
 
-    env = dotenv_values(os.path.join(_ROOT, ".env"))
+    env = dotenv_values(user_path(".env"))
     old = {}
-    old_settings_path = os.path.join(_ROOT, "data", "settings.json")
+    old_settings_path = user_path("data", "settings.json")
     if os.path.exists(old_settings_path):
         with open(old_settings_path, encoding="utf-8") as f:
             old = json.load(f)
     profiles = []
-    old_profiles_path = os.path.join(_ROOT, "data", "profiles.json")
+    old_profiles_path = user_path("data", "profiles.json")
     if os.path.exists(old_profiles_path):
         with open(old_profiles_path, encoding="utf-8") as f:
             profiles = json.load(f)
@@ -198,7 +218,7 @@ def ai_ready() -> bool:
 # -- connected Google accounts --------------------------------------------------------
 def load_profiles() -> list[dict]:
     profiles = load_settings().get("profiles")
-    return profiles if isinstance(profiles, list) else []
+    return [_relocate_profile(p) for p in profiles] if isinstance(profiles, list) else []
 
 
 def save_profiles(profiles: list[dict]):
@@ -208,12 +228,23 @@ def save_profiles(profiles: list[dict]):
     log_event("accounts_saved", f"count={len(profiles)}")
 
 
-# App-owned Chrome profiles hold Google login sessions, so they live outside the repository.
-_MANAGED_PROFILES_DIR = os.path.join(
-    os.getenv("LOCALAPPDATA") or os.path.join(_ROOT, "data"),
+# App-owned Chrome profiles hold Google login sessions, so from source they live outside the
+# repository. The portable program keeps them in its own data folder next to the .exe.
+_MANAGED_PROFILES_DIR = user_path("data", "chrome_profiles") if _FROZEN else os.path.join(
+    os.getenv("LOCALAPPDATA") or user_path("data"),
     "MarketingAIAgent",
     "chrome_profiles",
 )
+
+
+def _relocate_profile(profile: dict) -> dict:
+    """The program folder may have moved (another drive, USB): find its profile under the new folder."""
+    path = profile.get("path") if isinstance(profile, dict) else None
+    if path and not os.path.isdir(path):
+        moved = os.path.join(_MANAGED_PROFILES_DIR, os.path.basename(os.path.normpath(path)))
+        if os.path.isdir(moved):
+            return {**profile, "path": moved}
+    return profile
 
 
 def new_managed_profile_dir() -> str:
@@ -232,8 +263,8 @@ def remove_managed_profile(path: str):
 # ---------------------------------------------------------------------------
 # Error logging
 # ---------------------------------------------------------------------------
-_ERROR_LOG_PATH = os.path.join(_ROOT, "data", "error.log")
-_ACTIVITY_LOG_PATH = os.path.join(_ROOT, "data", "activity.log")
+_ERROR_LOG_PATH = user_path("data", "error.log")
+_ACTIVITY_LOG_PATH = user_path("data", "activity.log")
 
 
 def _ensure_log_dir():

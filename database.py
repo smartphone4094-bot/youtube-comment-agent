@@ -4,7 +4,7 @@ from datetime import date
 
 import config
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "data", "comments.db")
+DB_PATH = config.user_path("data", "comments.db")
 
 
 def _get_conn():

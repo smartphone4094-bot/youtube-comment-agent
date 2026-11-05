@@ -496,7 +496,7 @@ def _fix_quotes(text: str) -> str:
     return _one_line("".join(c for _, c in kept))
 
 
-_QUICK_RULES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vendor", "im_not_ai", "quick-rules.md")
+_QUICK_RULES_PATH = config.resource_path("vendor", "im_not_ai", "quick-rules.md")
 
 
 def _change_rate(before: str, after: str) -> float:

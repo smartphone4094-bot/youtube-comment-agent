@@ -25,7 +25,8 @@ AI 서비스는 설정에서 고른 것부터 쓰고, 한도·오류가 나면 �
 |----------|------|----------|------|
 | [Python](https://www.python.org/) | 3.12 | PSF License | 런타임 |
 | [Streamlit](https://github.com/streamlit/streamlit) | 1.40.2 | Apache 2.0 | 대시보드 UI |
-| [Playwright for Python](https://github.com/microsoft/playwright-python) | 1.49.1 | Apache 2.0 | Chrome 자동화 (Google 로그인 · 댓글 게시) |
+| [Playwright for Python](https://github.com/microsoft/playwright-python) | 1.64.1 | Apache 2.0 | Chrome 자동화 (Google 로그인 · 댓글 게시) |
+| [PyInstaller](https://github.com/pyinstaller/pyinstaller) | 6.22.3 | GPL 2.0 (bootloader 예외 조항) | 실행 파일 빌드 (빌드할 때만 사용) |
 | [google-api-python-client](https://github.com/googleapis/google-api-python-client) | 2.154.0 | Apache 2.0 | YouTube Data API 호출 |
 | [youtube-transcript-api](https://github.com/jdepoix/youtube-transcript-api) | 1.2.4 | MIT | 영상 자막 가져오기 |
 | [Anthropic Python SDK](https://github.com/anthropics/anthropic-sdk-python) | 0.39.0 | MIT | Claude API 호출 |
@@ -35,6 +36,8 @@ AI 서비스는 설정에서 고른 것부터 쓰고, 한도·오류가 나면 �
 | [im-not-ai](https://github.com/epoko77-ai/im-not-ai) (© 2026 epoko77-ai) | `vendor/im_not_ai/` 에 포함 | MIT | 댓글 심사·윤문 단계의 AI 말투 탐지 룰북(`quick-rules.md`)과 변경률 기준 |
 
 im-not-ai는 원본 라이선스 전문을 [vendor/im_not_ai/LICENSE](vendor/im_not_ai/LICENSE)에 함께 두었습니다.
+
+실행 파일에는 위 패키지가 쓰는 하위 오픈소스(Streamlit이 쓰는 pandas · numpy · pyarrow · altair · tornado, Playwright 드라이버에 포함된 Node.js 등)도 함께 들어갑니다. PyInstaller의 bootloader 예외 조항에 따라 PyInstaller로 만든 실행 파일에는 GPL이 적용되지 않습니다.
 
 ## 외부 서비스 (API)
 
@@ -58,28 +61,64 @@ im-not-ai는 원본 라이선스 전문을 [vendor/im_not_ai/LICENSE](vendor/im_
 |----------|------|
 | Claude Browser (Claude Code 내장 브라우저) | 개발 서버 화면 확인·클릭 테스트 |
 
-## 설치 및 실행
+## 실행 방법 (PC 프로그램)
 
-### 1. 사전 요구사항
+Python 설치도, 프로그램 설치도 필요 없습니다. 필요한 패키지는 모두 프로그램 폴더 안에 들어 있습니다.
 
-- Python 3.12+
-- Chrome 브라우저
-- YouTube Data API Key ([Google Cloud Console](https://console.cloud.google.com/)에서 발급)
-- AI API Key (Gemini / Claude / OpenRouter / OpenAI 중 하나 이상)
+**필요한 것**
+- Windows 10 이상 + Chrome 브라우저 (계정 로그인과 댓글 게시에 사용)
+- YouTube Data API 키 ([Google Cloud Console](https://console.cloud.google.com/)에서 발급)
+- AI API 키 (Gemini / Claude / OpenRouter / OpenAI 중 하나 이상)
 
-### 2. 설치
+**쓰는 법**
+1. `MarketingAI.zip`을 원하는 곳에 풀기 (바탕화면, USB, 한글 폴더 모두 가능)
+2. `MarketingAI\MarketingAI.exe` 더블클릭
+3. 검은 콘솔 창과 함께 프로그램 창(Chrome 앱 창)이 열림
+4. 상단 **설정**에서 YouTube 키와 AI 키 입력, 프로필 버튼에서 Google 계정 연결
+5. 끝낼 때는 프로그램 창을 닫으면 콘솔도 함께 종료
+
+**자동으로 생기는 파일** (모두 `MarketingAI.exe`와 같은 폴더)
+
+```
+MarketingAI\
+├── MarketingAI.exe
+├── _internal\              # 프로그램 본체 (Python과 패키지 포함, 건드리지 말 것)
+├── settings.yaml           # 설정 (API 키·계정 포함, 처음 실행 시 생성)
+└── data\
+    ├── comments.db         # 게시 기록
+    ├── error.log           # 오류 로그
+    ├── activity.log        # 활동 로그
+    ├── chrome_profiles\    # 연결한 Google 계정의 Chrome 프로필
+    └── app_window\         # 프로그램 창용 Chrome 프로필
+```
+
+폴더를 통째로 옮기면 설정과 연결한 계정도 그대로 따라갑니다. 다른 사람에게 줄 때는 `settings.yaml`과 `data\`를 빼고 주세요(API 키와 로그인 정보가 들어 있습니다).
+
+## 실행 파일 만들기 (개발자용)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File build.ps1
+```
+
+- `.venv-build` 가상환경을 새로 만들어 `requirements-build.txt`(앱 패키지 + PyInstaller)만 설치하고 빌드하므로, 앱이 쓰지 않는 패키지는 들어가지 않습니다.
+- 결과물: `dist\MarketingAI\MarketingAI.exe`와 전달용 `dist\MarketingAI.zip`
+- 빌드 설정은 `MarketingAI.spec`, 프로그램 시작 코드는 `launcher.py`
+
+## 소스에서 실행 (개발자용)
 
 ```bash
 pip install -r requirements.txt
-playwright install chromium
+streamlit run app.py
 ```
 
-### 3. 설정 (`settings.yaml`)
+브라우저에서 `http://localhost:8501`이 열립니다. 이때 설정·기록 파일은 프로젝트 폴더에 생깁니다.
 
-모든 설정은 프로젝트 폴더의 `settings.yaml` 한 파일에 저장됩니다. API 키와 계정이 들어 있어
+## 설정 (`settings.yaml`)
+
+모든 설정은 `settings.yaml` 한 파일에 저장됩니다. API 키와 계정이 들어 있어
 **git에 올라가지 않으며**(.gitignore), 코드에는 어떤 값도 하드코딩되어 있지 않습니다.
 
-- 앱을 처음 실행하면 `settings.example.yaml`(견본)로 자동 생성됩니다.
+- 처음 실행하면 `settings.example.yaml`(견본)로 자동 생성됩니다.
 - 앱 상단 **설정** 버튼에서 브랜드 이름·글자 수·하루 댓글 상한, YouTube API 키,
   AI 서비스와 키·모델을 바꿀 수 있습니다.
 
@@ -94,20 +133,13 @@ api:
   ai_models: { gemini: ..., anthropic: ..., openrouter: ..., openai: ... }
 ```
 
-### 4. 크롬 프로필 설정
+## Google 계정 연결
 
-1. 앱 상단의 프로필 버튼 → **Google 계정으로 로그인** 클릭
+1. 상단의 프로필 버튼 → **Google 계정으로 로그인** 클릭
 2. 새로 열린 Chrome 창에서 Google 계정에 로그인
 3. 로그인 후 Chrome 창을 닫으면 계정이 자동으로 연결됩니다
-4. 최대 3개 계정까지 연결 가능 (앱 전용 프로필은 `%LOCALAPPDATA%/MarketingAIAgent/chrome_profiles`에 저장)
-
-### 5. 실행
-
-```bash
-streamlit run app.py
-```
-
-브라우저에서 `http://localhost:8501` 자동 접속
+4. 최대 3개 계정까지 연결 가능. 게시할 때는 연결된 계정 중 하나가 무작위로 쓰입니다
+   (프로필 저장 위치: 실행 파일은 `data\chrome_profiles`, 소스 실행은 `%LOCALAPPDATA%/MarketingAIAgent/chrome_profiles`)
 
 ## 프로젝트 구조
 
@@ -120,7 +152,11 @@ streamlit run app.py
 ├── database.py               # SQLite 댓글 기록
 ├── config.py                 # settings.yaml 기반 설정 관리
 ├── dev_fixtures.py           # 개발용 테스트 픽스처
+├── launcher.py               # 실행 파일 시작 코드 (서버 실행 + 프로그램 창 열기)
+├── MarketingAI.spec          # PyInstaller 빌드 설정
+├── build.ps1                 # 실행 파일 빌드 스크립트
 ├── requirements.txt
+├── requirements-build.txt    # 빌드용 (requirements.txt + PyInstaller)
 ├── settings.example.yaml     # 설정 견본 (API 키 제외)
 ├── vendor/
 │   └── im_not_ai/            # im-not-ai 룰북 + 라이선스 (MIT)
