@@ -65,6 +65,7 @@ st.markdown("""
         --accent-ring: rgba(155, 143, 255, 0.38);
         --accent-shadow: rgba(123, 111, 223, 0.5);
         --card-shadow: 0 6px 20px -8px rgba(60, 40, 120, 0.18);
+        --soft-shadow: 0 4px 20px rgba(155, 143, 255, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
         --font-system: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
             "Apple SD Gothic Neo", "Segoe UI", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
     }
@@ -101,49 +102,40 @@ st.markdown("""
     .stApp button [data-testid="stMarkdownContainer"] p {
         color: inherit !important;
     }
-    /* ── Header: app-icon tile + brand eyebrow + title ── */
+    /* ── Header: ink wordmark, only the brand name in purple; account button on the same row ── */
     .app-header {
         display: flex;
         align-items: center;
-        gap: 12px;
-        margin-bottom: 0.5rem;
-    }
-    /* About the title's height, one gradient and one soft shadow */
-    .brand-tile {
-        flex-shrink: 0;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 40px;
-        height: 40px;
-        border-radius: 12px;
-        background: linear-gradient(145deg, #9B8FFF 0%, #7B6FDF 100%);
-        box-shadow: 0 6px 16px -8px rgba(123, 111, 223, 0.6);
-    }
-    .brand-tile > span {
-        color: #fff;
-        font-size: 1.25rem;
-        font-weight: 800;
-        line-height: 1;
-        letter-spacing: -0.04em;
-        transform: skewX(-8deg);
-    }
-    .app-header-text {
-        min-width: 0;
+        min-height: 44px;
     }
     .stApp h1.app-title {
         margin: 0 !important;
         padding: 0 !important;
-        font-size: clamp(1.6rem, 4.6vw, 2.25rem) !important;
-        font-weight: 700 !important;
-        letter-spacing: -0.03em;
+        font-size: clamp(1.5rem, 4.2vw, 1.9rem) !important;
+        font-weight: 800 !important;
+        letter-spacing: -0.035em;
+        color: var(--text) !important;
+    }
+    .app-title .brand-name {
+        color: var(--accent);
     }
     .app-title a {
         display: none !important;
     }
-    @media (max-width: 480px) {
-        .brand-tile { width: 34px; height: 34px; border-radius: 10px; }
-        .brand-tile > span { font-size: 1.05rem; }
+    @media (prefers-color-scheme: dark) {
+        .app-title .brand-name { color: #B8AFFF; }
+    }
+    [data-testid="stHorizontalBlock"]:has(.app-header) {
+        flex-wrap: nowrap !important;
+        align-items: center;
+    }
+    [data-testid="stHorizontalBlock"]:has(.app-header) > [data-testid="stColumn"] {
+        min-width: 0 !important;
+        width: auto !important;
+        flex: 1 1 0 !important;
+    }
+    [data-testid="stHorizontalBlock"]:has(.app-header) > [data-testid="stColumn"]:last-child {
+        flex: 0 0 6.5rem !important;
     }
 
     /* ── Search box: pill with the brand mark, a divider, and a search icon ── */
@@ -445,6 +437,101 @@ st.markdown("""
         font-size: 0.85rem;
         color: var(--text-secondary);
     }
+
+    /* ── Step 2 cards (section / featured), after sazasaju.com/fortune ── */
+    .section-card,
+    [data-testid="stVerticalBlockBorderWrapper"]:has(> div > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"] .comment-card-head) {
+        background: var(--card);
+        border: 1px solid var(--hairline) !important;
+        border-radius: 20px !important;
+        padding: 18px 18px 16px !important;
+        box-shadow: var(--soft-shadow);
+    }
+    .section-head h4 {
+        margin: 0 !important;
+        padding: 0 !important;
+        font-size: 1.15rem !important;
+        font-weight: 700 !important;
+        letter-spacing: -0.02em;
+        line-height: 1.4 !important;
+        color: var(--text);
+    }
+    .section-head p {
+        margin: 2px 0 0 !important;
+        font-size: 0.85rem;
+        font-weight: 500;
+        color: var(--text-secondary);
+    }
+    .section-card .section-head {
+        margin-bottom: 12px;
+    }
+    .section-scroll {
+        max-height: 220px;
+        overflow-y: auto;
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: var(--surface);
+        font-size: 0.9rem;
+        line-height: 1.75;
+        color: var(--text);
+        white-space: pre-wrap;
+        overscroll-behavior: contain;
+    }
+    .section-empty {
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+    }
+    .feature-card {
+        position: relative;
+        padding: 20px 22px;
+        border-radius: 20px;
+        border: 1px solid #CFC8F7;
+        background:
+            radial-gradient(120% 90% at 8% 0, #F7F5FF 0%, rgba(247, 245, 255, 0) 60%),
+            linear-gradient(145deg, #EEEAFF, #CFC6FB);
+    }
+    .feature-label {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #5B50C0;
+        margin-bottom: 6px;
+    }
+    .feature-text {
+        font-size: 1.3rem;
+        font-weight: 800;
+        line-height: 1.45;
+        letter-spacing: -0.02em;
+        color: #4D42AD;
+        word-break: keep-all;
+        overflow-wrap: anywhere;
+    }
+    @media (prefers-color-scheme: dark) {
+        .feature-card {
+            border-color: #4D4470;
+            background:
+                radial-gradient(120% 90% at 8% 0, rgba(155, 143, 255, 0.18) 0%, rgba(155, 143, 255, 0) 60%),
+                linear-gradient(145deg, #2D2550, #3A2F66);
+        }
+        .feature-label { color: #B8AFFF; }
+        .feature-text { color: #E4DFFF; }
+    }
+    .count-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.82rem;
+        color: var(--text-secondary);
+        font-variant-numeric: tabular-nums;
+    }
+    .count-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 10px;
+        border-radius: 9999px;
+        font-weight: 700;
+    }
+    .count-chip.ok { background: var(--surface-strong); color: var(--accent-text); }
+    .count-chip.bad { background: rgba(232, 72, 76, 0.14); color: #C0282D; }
     /* Row buttons sit short at the bottom-right of the card instead of spanning it */
     [class*="st-key-select_"],
     [class*="st-key-resume_"] {
@@ -494,17 +581,13 @@ st.markdown("""
         .status-warn { color: #FFC56B; }
         .status-full { color: #FF8A8D; }
     }
-    [data-testid="stHorizontalBlock"]:has(.status-badge) {
-        flex-wrap: nowrap !important;
-        align-items: center;
+    .status-badge b {
+        font-weight: 800;
+        margin-left: 0.25em;
     }
-    [data-testid="stHorizontalBlock"]:has(.status-badge) > [data-testid="stColumn"] {
-        min-width: 0 !important;
-        width: auto !important;
-        flex: 1 1 0 !important;
-    }
-    [data-testid="stHorizontalBlock"]:has(.status-badge) > [data-testid="stColumn"]:last-child {
-        flex: 0 0 6.5rem !important;
+    .status-dot {
+        margin: 0 0.4em;
+        opacity: 0.55;
     }
     [data-testid="stPopover"] button,
     [data-testid="stPopover"] button * {
@@ -842,6 +925,8 @@ defaults = {
     "last_search": "",
     "current_step": 1,
     "ai_result": None,
+    "analysis": None,              # {"video_id", "transcript", "popular_comments"} for step 2
+    "analysis_error": False,       # generation failed; wait for a retry instead of looping
     "confirmed_comment": None,
     "edited_comment": "",
     "posting_status": None,
@@ -975,38 +1060,16 @@ def show_login_required_dialog():
 if "profiles_list" not in st.session_state:
     st.session_state.profiles_list = config.load_profiles()
 
-st.markdown(
-    '<div class="app-header">'
-    '<span class="brand-tile" aria-hidden="true"><span>운</span></span>'
-    '<div class="app-header-text">'
-    '<h1 class="app-title">마케팅AI 에이전트</h1>'
-    '</div></div>',
-    unsafe_allow_html=True,
-)
-
-# Profile popover placed next to the daily comment badge below the title
+# Title row: the account button sits at the title's right end
 _profiles_list = st.session_state.profiles_list
 _profile_count = len(_profiles_list)
 
-# Today's comment count / daily limit
-posted_today = database.today_count()
-daily_max = config.DAILY_MAX_COMMENTS
-remaining = max(0, daily_max - posted_today)
-
-if remaining == 0:
-    badge_class = "status-full"
-    badge_text = f"오늘 댓글 {posted_today}/{daily_max} (한도 초과)"
-elif remaining <= 3:
-    badge_class = "status-warn"
-    badge_text = f"오늘 댓글 {posted_today}/{daily_max} (잔여 {remaining}개)"
-else:
-    badge_class = "status-ok"
-    badge_text = f"오늘 댓글 {posted_today}/{daily_max} (잔여 {remaining}개)"
-
-_badge_col, _profile_col = st.columns([6, 1])
-with _badge_col:
+_title_col, _profile_col = st.columns([6, 1])
+with _title_col:
     st.markdown(
-        f'<span class="status-badge {badge_class}">{badge_text}</span>',
+        '<div class="app-header">'
+        '<h1 class="app-title"><span class="brand-name">운명원</span> 마케팅 AI에이전트</h1>'
+        '</div>',
         unsafe_allow_html=True,
     )
 with _profile_col:
@@ -1085,6 +1148,23 @@ with _profile_col:
         st.markdown('<hr class="profile-item-divider">', unsafe_allow_html=True)
 
         _google_login_button("popover")
+
+# Today's comment count / daily limit
+posted_today = database.today_count()
+daily_max = config.DAILY_MAX_COMMENTS
+remaining = max(0, daily_max - posted_today)
+
+if remaining == 0:
+    badge_class, badge_tail = "status-full", "한도 도달"
+elif remaining <= 3:
+    badge_class, badge_tail = "status-warn", f"{remaining}개 남음"
+else:
+    badge_class, badge_tail = "status-ok", f"{remaining}개 남음"
+st.markdown(
+    f'<span class="status-badge {badge_class}">오늘 <b>{posted_today}</b>/{daily_max}'
+    f'<span class="status-dot">·</span>{badge_tail}</span>',
+    unsafe_allow_html=True,
+)
 
 
 if browser_automation.google_login_status():
@@ -1171,11 +1251,18 @@ def _select_video(video: dict):
         except Exception as e:
             config.log_error("get_video_details", e, f"videoId={video.get('videoId')}")
             st.session_state.selected_video = video
-    # A new video invalidates anything generated for the previous one.
+    _reset_generation()
+    go_to_step(2)
+
+
+def _reset_generation():
+    """A new video invalidates anything loaded or generated for the previous one."""
     st.session_state.ai_result = None
+    st.session_state.analysis = None
+    st.session_state.analysis_error = False
     st.session_state.confirmed_comment = None
     st.session_state.edited_comment = ""
-    go_to_step(2)
+    st.session_state.pop("comment_edit_area", None)
 
 
 # ===========================================================================
@@ -1260,9 +1347,7 @@ if current == 1:
                             details = youtube_api.get_video_details(vid)
                             if details:
                                 st.session_state.selected_video = details
-                                st.session_state.ai_result = None
-                                st.session_state.confirmed_comment = None
-                                st.session_state.edited_comment = ""
+                                _reset_generation()
                                 go_to_step(2)
                             else:
                                 st.error(
@@ -1460,104 +1545,145 @@ elif current == 2:
             unsafe_allow_html=True,
         )
 
-    st.markdown("---")
-
-    # -- Generate / Regenerate buttons --
-    btn_col1, btn_col2 = st.columns(2)
-    with btn_col1:
-        generate_clicked = st.button(
-            "✨ 댓글 생성" if not st.session_state.ai_result else "🔄 다시 생성",
-            use_container_width=True,
-            type="primary",
-        )
-    with btn_col2:
-        confirm_clicked = st.button(
-            "✅ 댓글 확정",
-            use_container_width=True,
-            disabled=st.session_state.ai_result is None,
-        )
-
-    # -- AI generation logic --
-    if generate_clicked:
-        with st.spinner("영상을 분석하고 댓글을 생성하는 중..."):
+    # -- 1. Video content: the transcript, or the description when there are no captions --
+    analysis = st.session_state.analysis
+    if not analysis or analysis.get("video_id") != video_id:
+        with st.spinner("영상 내용을 불러오는 중..."):
+            transcript = None
             try:
-                captions = youtube_api.get_video_captions(video_id)
+                transcript = youtube_api.get_transcript(video_id)
+            except Exception as e:
+                config.log_error("get_transcript", e, f"videoId={video_id}")
+            try:
                 popular_comments = youtube_api.get_popular_comments(video_id)
+            except Exception as e:
+                config.log_error("get_popular_comments", e, f"videoId={video_id}")
+                popular_comments = []
+        analysis = {
+            "video_id": video_id,
+            "transcript": transcript,
+            "popular_comments": popular_comments,
+        }
+        st.session_state.analysis = analysis
+
+    transcript = analysis["transcript"]
+    description = (sv.get("description") or "").strip()
+    if transcript:
+        content_sub, content_text = "영상 자막에서 가져온 내용이에요", transcript
+    elif description:
+        content_sub, content_text = "자막이 없어 영상 설명을 대신 보여드려요", description
+    else:
+        content_sub, content_text = "자막과 설명이 없어 제목으로 분석해요", ""
+    content_body = (
+        f'<div class="section-scroll"><bdi>{html.escape(content_text[:6000])}</bdi></div>'
+        if content_text
+        else '<div class="section-empty">표시할 영상 내용이 없습니다.</div>'
+    )
+    st.markdown(
+        f'<section class="section-card">'
+        f'<div class="section-head"><h4>영상 내용</h4><p>{content_sub}</p></div>'
+        f"{content_body}</section>",
+        unsafe_allow_html=True,
+    )
+
+    # -- 2. Analysis runs by itself once per video; a failure waits for a retry instead of looping --
+    if st.session_state.ai_result is None and not st.session_state.analysis_error:
+        with st.spinner("영상 속 고민을 분석하고 댓글을 쓰는 중..."):
+            try:
                 result = ai_comment.generate_comment(
                     title=sv.get("title", ""),
                     description=sv.get("description", ""),
-                    captions=captions,
-                    popular_comments=popular_comments,
+                    captions=transcript,
+                    popular_comments=analysis["popular_comments"],
                 )
-                st.session_state.ai_result = result
-                st.session_state.ai_result["_popular_comments"] = popular_comments
-                st.session_state.edited_comment = result.get("comment", "")
-                st.session_state.confirmed_comment = None
-                st.rerun()
             except Exception as e:
-                config.log_error(
-                    "generate_comment", e,
-                    f"videoId={video_id}",
-                )
-                st.error("댓글 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.")
+                config.log_error("generate_comment", e, f"videoId={video_id}")
+                result = None
+        if result:
+            st.session_state.ai_result = result
+            st.session_state.edited_comment = result.get("comment", "")
+            st.session_state.confirmed_comment = None
+            st.session_state.pop("comment_edit_area", None)
+        else:
+            st.session_state.analysis_error = True
+        st.rerun()
 
-    # -- Display AI results --
+    if st.session_state.analysis_error:
+        st.error("댓글을 만드는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.")
+        if st.button("다시 시도", type="primary", icon=":material/refresh:", key="retry_analysis"):
+            st.session_state.analysis_error = False
+            st.rerun()
+
     if st.session_state.ai_result:
         ai = st.session_state.ai_result
 
-        st.markdown("#### 🔍 영상 속 고민")
-        st.info(_plain_md(ai.get("concern", "")))
-
-        if ai.get("warning"):
-            st.warning(_plain_md(ai["warning"]))
-
-        st.markdown("#### 💬 댓글 초안")
-        edited = st.text_area(
-            "댓글을 수정할 수 있습니다",
-            value=st.session_state.edited_comment,
-            height=120,
-            key="comment_edit_area",
-            label_visibility="collapsed",
+        # -- 3. The concern, as the page's featured card --
+        st.markdown(
+            f'<section class="feature-card">'
+            f'<div class="feature-label">영상 속 고민</div>'
+            f'<div class="feature-text"><bdi>{html.escape(ai.get("concern", ""))}</bdi></div>'
+            f"</section>",
+            unsafe_allow_html=True,
         )
-        st.session_state.edited_comment = edited
 
-        char_count = len(edited)
-        is_valid = config.COMMENT_MIN_CHARS <= char_count <= config.COMMENT_MAX_CHARS
-        if is_valid:
+        # -- 4. The generated comment, editable in place --
+        with st.container(border=True):
             st.markdown(
-                f"<span style='color: #28a745; font-size: 0.85rem;'>"
-                f"✅ {char_count}자 ({config.COMMENT_MIN_CHARS}~{config.COMMENT_MAX_CHARS}자 이내)"
-                f"</span>",
+                '<div class="section-head comment-card-head"><h4>생성된 댓글</h4>'
+                "<p>필요하면 직접 고쳐 쓸 수 있어요</p></div>",
                 unsafe_allow_html=True,
             )
-        else:
+            edited = st.text_area(
+                "생성된 댓글",
+                value=st.session_state.edited_comment,
+                height=130,
+                key="comment_edit_area",
+                label_visibility="collapsed",
+            )
+            st.session_state.edited_comment = edited
+
+            char_count = len(edited)
+            is_valid = config.COMMENT_MIN_CHARS <= char_count <= config.COMMENT_MAX_CHARS
+            limits = f"{config.COMMENT_MIN_CHARS}~{config.COMMENT_MAX_CHARS}자"
             st.markdown(
-                f"<span style='color: #dc3545; font-size: 0.85rem;'>"
-                f"⚠️ {char_count}자 (기준: {config.COMMENT_MIN_CHARS}~{config.COMMENT_MAX_CHARS}자)"
-                f"</span>",
+                f'<div class="count-row"><span class="count-chip {"ok" if is_valid else "bad"}">'
+                f"{char_count}자</span><span>{limits} 사이로 맞춰주세요</span></div>",
                 unsafe_allow_html=True,
             )
+            if ai.get("warning"):
+                st.warning(_plain_md(ai["warning"]))
 
-        with st.expander("🧠 AI 분석 근거", expanded=False):
+            regen_col, confirm_col = st.columns(2)
+            with regen_col:
+                regenerate_clicked = st.button(
+                    "다시 생성", use_container_width=True,
+                    icon=":material/refresh:", key="regenerate_comment",
+                )
+            with confirm_col:
+                confirm_clicked = st.button(
+                    "댓글 확정", use_container_width=True, type="primary",
+                    icon=":material/check:", key="confirm_comment",
+                )
+            # The error belongs next to the button that caused it
+            if confirm_clicked and not is_valid:
+                st.error(f"댓글은 {limits}여야 합니다. 현재 {char_count}자입니다.")
+
+        with st.expander("AI 분석 근거", expanded=False):
             st.markdown(f"**분석 이유:** {_plain_md(ai.get('reasoning', ''))}")
-            pop_comments = ai.get("_popular_comments", [])
+            pop_comments = analysis["popular_comments"]
             if pop_comments:
                 st.markdown("**참고한 인기 댓글:**")
                 for pc in pop_comments[:5]:
                     likes = pc.get("likeCount", 0)
-                    st.markdown(f"- 👍 {likes:,} | {_plain_md(pc.get('text', '')[:80])}")
+                    st.markdown(f"- 좋아요 {likes:,} · {_plain_md(pc.get('text', '')[:80])}")
 
-    # -- Confirm logic --
-    if confirm_clicked and st.session_state.ai_result:
-        current_text = st.session_state.edited_comment
-        char_count = len(current_text)
-        if char_count < config.COMMENT_MIN_CHARS or char_count > config.COMMENT_MAX_CHARS:
-            st.error(
-                f"댓글은 {config.COMMENT_MIN_CHARS}~{config.COMMENT_MAX_CHARS}자여야 합니다. "
-                f"현재 {char_count}자입니다."
-            )
-        else:
-            st.session_state.confirmed_comment = current_text
+        if regenerate_clicked:
+            st.session_state.ai_result = None
+            st.session_state.analysis_error = False
+            st.rerun()
+
+        if confirm_clicked and is_valid:
+            st.session_state.confirmed_comment = edited
             st.toast("댓글이 확정되었습니다!")
             go_to_step(3)
 
@@ -1721,9 +1847,7 @@ elif current == 3:
             ):
                 # Reset for a fresh run
                 st.session_state.selected_video = None
-                st.session_state.ai_result = None
-                st.session_state.confirmed_comment = None
-                st.session_state.edited_comment = ""
+                _reset_generation()
                 st.session_state.post_result = None
                 st.session_state.posting_status = None
                 go_to_step(1)

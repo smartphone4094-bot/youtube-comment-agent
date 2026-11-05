@@ -109,6 +109,14 @@ class FakeYouTube(_Proxy):
     def get_video_captions(self, video_id):
         return None
 
+    def get_transcript(self, video_id):
+        if self._mode == "empty":
+            return None  # no captions: the page falls back to the description
+        if self._mode == "one":
+            return "안녕하세요 여러분 오늘은 연락이 갑자기 줄어든 연인에 대한 이야기를 해볼게요."
+        return ("그래서 제가 그때 연락을 기다렸거든요 근데 답장이 하루 이틀 계속 안 오는 거예요 " * 40
+                + "**마크다운** <b>태그</b> $1 $2 " + "공백없이이어지는아주긴자막" * 30)
+
 
 class FakeDatabase(_Proxy):
     def today_count(self):

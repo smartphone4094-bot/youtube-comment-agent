@@ -161,7 +161,23 @@ def get_video_captions(video_id: str) -> str | None:
     if the transcript library is unavailable or no Korean transcript exists.
     Returns None if nothing is available.
     """
-    # Try youtube-transcript-api (optional dependency)
+    transcript = get_transcript(video_id)
+    if transcript:
+        return transcript
+
+    # Fallback: return the video description
+    try:
+        details = get_video_details(video_id)
+        if details and details.get("description"):
+            return details["description"]
+    except Exception:
+        pass
+
+    return None
+
+
+def get_transcript(video_id: str) -> str | None:
+    """The video's spoken transcript only (Korean, then auto-generated Korean, then English)."""
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
 
@@ -188,15 +204,7 @@ def get_video_captions(video_id: str) -> str | None:
     except ImportError:
         pass  # youtube-transcript-api not installed
     except Exception as e:
-        config.log_error("get_video_captions", e)
-
-    # Fallback: return the video description
-    try:
-        details = get_video_details(video_id)
-        if details and details.get("description"):
-            return details["description"]
-    except Exception:
-        pass
+        config.log_error("get_transcript", e, f"videoId={video_id}")
 
     return None
 
