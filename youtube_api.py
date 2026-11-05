@@ -187,6 +187,89 @@ def get_video_captions(video_id: str) -> str | None:
     return None
 
 
+def search_trending_videos(keyword: str = "연애", max_results: int = 20) -> list[dict]:
+    """Search for videos that are about to trend.
+
+    Criteria: 1,000~5,000 views uploaded within the last 24 hours,
+    implying a growth rate of roughly 150+ views/hour.
+    Returns the same dict shape as search_videos.
+    """
+    try:
+        from datetime import timedelta, timezone
+
+        service = _get_service()
+        after = (datetime.now(timezone.utc) - timedelta(hours=24)).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
+
+        response = (
+            service.search()
+            .list(
+                q=keyword,
+                part="snippet",
+                type="video",
+                maxResults=50,
+                order="viewCount",
+                regionCode="KR",
+                relevanceLanguage="ko",
+                publishedAfter=after,
+            )
+            .execute()
+        )
+
+        video_ids = [item["id"]["videoId"] for item in response.get("items", [])]
+        if not video_ids:
+            return []
+
+        stats_response = (
+            service.videos()
+            .list(id=",".join(video_ids), part="snippet,statistics")
+            .execute()
+        )
+
+        now_utc = datetime.now(timezone.utc)
+        results = []
+        for item in stats_response.get("items", []):
+            stats = item.get("statistics", {})
+            snippet = item["snippet"]
+            view_count = int(stats.get("viewCount", "0"))
+            published = datetime.fromisoformat(
+                snippet["publishedAt"].replace("Z", "+00:00")
+            )
+            hours_since = max((now_utc - published).total_seconds() / 3600, 1)
+            views_per_hour = view_count / hours_since
+
+            if 1000 <= view_count <= 5000 and views_per_hour >= 150:
+                thumbnails = snippet.get("thumbnails", {})
+                thumbnail_url = (
+                    thumbnails.get("high", {}).get("url")
+                    or thumbnails.get("medium", {}).get("url")
+                    or thumbnails.get("default", {}).get("url", "")
+                )
+                results.append(
+                    {
+                        "videoId": item["id"],
+                        "title": snippet.get("title", ""),
+                        "channelTitle": snippet.get("channelTitle", ""),
+                        "publishedAt": snippet.get("publishedAt", ""),
+                        "thumbnail": thumbnail_url,
+                        "description": snippet.get("description", ""),
+                        "viewCount": str(view_count),
+                        "viewsPerHour": round(views_per_hour),
+                    }
+                )
+
+        results.sort(key=lambda v: v["viewsPerHour"], reverse=True)
+        return results[:max_results]
+
+    except HttpError as e:
+        print(f"[youtube_api] search_trending_videos HTTP error: {e}")
+        return []
+    except Exception as e:
+        print(f"[youtube_api] search_trending_videos error: {e}")
+        return []
+
+
 def extract_video_id(url: str) -> str | None:
     """Extract a YouTube video ID from various URL formats.
 

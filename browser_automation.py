@@ -1,21 +1,23 @@
 import asyncio
 from playwright.async_api import async_playwright
-from config import CHROME_PROFILES
+import config
 import time
 
 
 def get_available_profiles() -> list[dict]:
+    profiles = config.load_profiles()
     return [
-        {"index": i, "name": f"유튜브{i + 1}", "path": path}
-        for i, path in enumerate(CHROME_PROFILES)
+        {"index": i, "name": p.get("name", f"유튜브{i + 1}"), "path": p["path"]}
+        for i, p in enumerate(profiles)
     ]
 
 
 async def _post_comment_async(video_id: str, comment: str, profile_index: int, status_callback=None):
-    if profile_index >= len(CHROME_PROFILES):
+    profiles = config.load_profiles()
+    if profile_index >= len(profiles):
         return {"success": False, "error": f"프로필 {profile_index + 1} 경로가 설정되지 않았습니다."}
 
-    profile_path = CHROME_PROFILES[profile_index]
+    profile_path = profiles[profile_index]["path"]
 
     async with async_playwright() as p:
         if status_callback:
