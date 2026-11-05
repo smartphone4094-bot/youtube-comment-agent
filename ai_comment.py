@@ -144,9 +144,11 @@ def _post_json(url: str, body: dict, headers: dict, service: str) -> dict:
     req = urllib.request.Request(
         url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json", **headers}
     )
-    # HTTPS connections here occasionally fail certificate checks for a short while;
-    # a short retry rides out the bad window.
-    for attempt in range(3):
+    # HTTPS here is sometimes intercepted for a few seconds (urllib wraps the certificate
+    # failure in URLError), so TLS failures wait that window out (config.TLS_RETRY_DELAYS);
+    # other connection errors get two quick retries. urlopen opens a new connection each try.
+    tls_waits, other_waits = iter(config.TLS_RETRY_DELAYS), iter((1.0, 2.0))
+    while True:
         try:
             with urllib.request.urlopen(req, timeout=_CALL_TIMEOUT) as resp:
                 return json.loads(resp.read())
@@ -168,9 +170,10 @@ def _post_json(url: str, body: dict, headers: dict, service: str) -> dict:
         except urllib.error.URLError as e:
             if isinstance(e.reason, TimeoutError):
                 raise ServiceBusyError(f"{service} 응답 시간 초과 ({_CALL_TIMEOUT}초)") from e
-            if attempt == 2:
+            wait = next(tls_waits if config.is_tls_failure(e) else other_waits, None)
+            if wait is None:
                 raise
-            time.sleep(1.0 * (attempt + 1))
+            time.sleep(wait)
 
 
 def _empty(service: str, reason) -> ValueError:
@@ -258,14 +261,16 @@ def _call_anthropic(prompt: str, key: str, model: str) -> str:
     # Current Claude models always think; low effort keeps a short comment quick and cheap.
     # The installed SDK predates output_config / fallbacks, so they go through extra_body.
     # fallbacks="default" re-runs a declined request on another model inside the same call.
+    # A certificate failure surfaces as anthropic.APIConnectionError (httpx.ConnectError
+    # underneath); with_tls_retry waits out an interception window, then _call_model falls back.
     try:
-        response = client.messages.create(
+        response = config.with_tls_retry(lambda: client.messages.create(
             model=model,
             max_tokens=4096,
             messages=[{"role": "user", "content": prompt}],
             extra_headers={"anthropic-beta": "server-side-fallback-2026-07-01"},
             extra_body={"output_config": {"effort": "low"}, "fallbacks": "default"},
-        )
+        ))
     except anthropic.RateLimitError as e:
         # The SDK raises its own 429 type; map it so provider fallback sees it.
         raise RateLimitError(f"Claude API 오류 (429): {e}") from e

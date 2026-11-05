@@ -1,7 +1,6 @@
 """YouTube Data API v3 integration module."""
 
 import re
-import time
 from datetime import datetime
 
 from googleapiclient.discovery import build
@@ -12,6 +11,16 @@ import config
 def _get_service():
     """Build and return a YouTube API service client."""
     return build("youtube", "v3", developerKey=config.youtube_api_key())
+
+
+def _execute(make_request):
+    """Run make_request(service).execute(), riding out a short HTTPS interception window.
+
+    Each try builds a new service, so a new httplib2.Http and a fresh TLS handshake.
+    execute(num_retries=...) is not used: it reuses one Http and also retries 403/429 replies.
+    HttpError replies (4xx/5xx) are raised at once.
+    """
+    return config.with_tls_retry(lambda: make_request(_get_service()).execute())
 
 
 def _thumbnail_url(snippet: dict) -> str:
@@ -42,7 +51,6 @@ def search_videos(
 
     Raises on API failure so the caller can log it and tell the user.
     """
-    service = _get_service()
     request_kwargs = dict(
         q=keyword,
         part="snippet",
@@ -55,7 +63,7 @@ def search_videos(
     if page_token:
         request_kwargs["pageToken"] = page_token
 
-    response = service.search().list(**request_kwargs).execute()
+    response = _execute(lambda service: service.search().list(**request_kwargs))
 
     videos = []
     for item in response.get("items", []):
@@ -85,11 +93,10 @@ def get_video_details(video_id: str) -> dict | None:
     Returns None on failure.
     """
     try:
-        service = _get_service()
-        response = service.videos().list(
+        response = _execute(lambda service: service.videos().list(
             id=video_id,
             part="snippet,statistics",
-        ).execute()
+        ))
 
         items = response.get("items", [])
         if not items:
@@ -111,6 +118,8 @@ def get_video_details(video_id: str) -> dict | None:
         }
 
     except Exception as e:
+        if config.is_cert_failure(e):
+            raise  # the caller logs it and tells the user about the interception, not a bad URL
         config.log_error("get_video_details", e)
         return None
 
@@ -121,14 +130,13 @@ def get_popular_comments(video_id: str, max_results: int = 10) -> list[dict]:
     Returns a list of dicts with keys: text, likeCount, author
     """
     try:
-        service = _get_service()
-        response = service.commentThreads().list(
+        response = _execute(lambda service: service.commentThreads().list(
             videoId=video_id,
             part="snippet",
             maxResults=min(max_results, 100),
             order="relevance",
             textFormat="plainText",
-        ).execute()
+        ))
 
         comments = []
         for item in response.get("items", []):
@@ -160,23 +168,18 @@ def get_transcript(video_id: str) -> str | None:
     """
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
-        from requests.exceptions import ConnectionError as RequestsConnectionError
     except ImportError:
         return None
 
-    # Connections to youtube.com here occasionally fail TLS verification for a few
-    # minutes at a time, so a short retry rides out the bad window.
-    for attempt in range(3):
-        try:
-            return _fetch_transcript(YouTubeTranscriptApi(), video_id)
-        except RequestsConnectionError as e:
-            if attempt == 2:
-                config.log_error("get_transcript", e, f"videoId={video_id}")
-                return None
-            time.sleep(1.0 * (attempt + 1))
-        except Exception as e:
-            config.log_error("get_transcript", e, f"videoId={video_id}")
-            return None
+    # HTTPS here is sometimes intercepted for a few seconds (see config.with_tls_retry).
+    # Captions are optional (the description stands in), so the retry is kept short.
+    # A new YouTubeTranscriptApi per try means a new requests session and handshake.
+    try:
+        return config.with_tls_retry(lambda: _fetch_transcript(YouTubeTranscriptApi(), video_id),
+                                     delays=(1.0, 2.0, 3.0))
+    except Exception as e:
+        config.log_error("get_transcript", e, f"videoId={video_id}")
+        return None
 
 
 def _fetch_transcript(api, video_id: str) -> str | None:

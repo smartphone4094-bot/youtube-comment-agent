@@ -304,6 +304,62 @@ def _append_line(path: str, line: str):
         pass
 
 
+# ---------------------------------------------------------------------------
+# HTTPS interception: some PCs run software (NetFilterSDK) that intercepts HTTPS and, for
+# a few seconds at a time, presents its own weak certificate. Verification correctly
+# rejects it, so the calls wait the window out on a fresh connection instead.
+# ---------------------------------------------------------------------------
+TLS_RETRY_DELAYS = (1.0, 2.0, 4.0, 6.0)  # seconds between attempts: 5 tries over ~13s
+
+def intercepted_message(target: str = "Google") -> str:
+    return (f"이 PC의 보안·광고차단 프로그램(NetFilterSDK)이 {target} 연결을 가로채고 있어 접속하지 못했습니다. "
+            "잠시 후 다시 시도하거나 해당 프로그램에서 이 프로그램을 예외로 등록해 주세요.")
+
+
+def _error_chain(error: BaseException):
+    """The error and what it wraps: urllib's URLError.reason, urllib3's .reason, __cause__/__context__."""
+    seen, stack = set(), [error]
+    while stack:
+        e = stack.pop()
+        if not isinstance(e, BaseException) or id(e) in seen:
+            continue
+        seen.add(id(e))
+        yield e
+        stack += [getattr(e, "reason", None), e.__cause__, e.__context__,
+                  *(a for a in e.args if isinstance(a, BaseException))]
+
+
+def is_cert_failure(error: BaseException) -> bool:
+    """A certificate check failed somewhere under this error (the interception case)."""
+    import ssl
+    return any(isinstance(e, ssl.SSLCertVerificationError) or "CERTIFICATE_VERIFY_FAILED" in str(e)
+               for e in _error_chain(error))
+
+
+def is_tls_failure(error: BaseException) -> bool:
+    """The TLS handshake failed (certificate or otherwise); an HTTP error reply never counts."""
+    import ssl
+    return any(isinstance(e, ssl.SSLError) for e in _error_chain(error)) or is_cert_failure(error)
+
+
+def with_tls_retry(call, delays=TLS_RETRY_DELAYS):
+    """Run call(), retrying only TLS handshake failures after each delay. call() must open
+    a new connection each time (build its client inside) so every try is a fresh handshake."""
+    import time
+    for delay in (*delays, None):
+        try:
+            return call()
+        except Exception as e:
+            if delay is None or not is_tls_failure(e):
+                raise
+            time.sleep(delay)
+
+
+def user_error_message(error: BaseException, default: str) -> str:
+    """What the user sees for a failed call: the interception notice when that is the cause."""
+    return intercepted_message() if is_cert_failure(error) else default
+
+
 def read_error_log_by_date(target_date=None, limit: int = 50) -> list[str]:
     if not os.path.isfile(_ERROR_LOG_PATH):
         return []

@@ -716,7 +716,7 @@ if current == 1:
                         st.warning("검색 결과가 없습니다. 다른 키워드를 시도해주세요.")
                 except Exception as e:
                     config.log_error("search_videos", e, f"keyword={keyword.strip()}")
-                    st.error("검색 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.")
+                    st.error(config.user_error_message(e, "검색 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."))
 
     # --- URL direct input ---
     st.markdown("")
@@ -756,7 +756,7 @@ if current == 1:
                                 )
                         except Exception as e:
                             config.log_error("get_video_details", e, f"url={url_input}")
-                            st.error("영상 정보를 불러오는 중 오류가 발생했습니다.")
+                            st.error(config.user_error_message(e, "영상 정보를 불러오는 중 오류가 발생했습니다."))
 
     # --- Video list with pagination ---
     st.markdown("")
@@ -901,7 +901,7 @@ if current == 1:
                                         st.toast("더 이상 검색 결과가 없습니다.")
                                 except Exception as e:
                                     config.log_error("search_videos_page", e, f"page={next_page}")
-                                    st.error("다음 페이지를 불러오는 중 오류가 발생했습니다.")
+                                    st.error(config.user_error_message(e, "다음 페이지를 불러오는 중 오류가 발생했습니다."))
                             st.rerun()
                         else:
                             st.session_state.search_has_more = False
@@ -1003,7 +1003,8 @@ elif current == 2:
         except Exception as e:
             config.log_error("generate_comment", e, f"videoId={video_id}")
             st.session_state.analysis_error_kind = (
-                "quota" if isinstance(e, ai_comment.RateLimitError) else "other"
+                "quota" if isinstance(e, ai_comment.RateLimitError)
+                else "intercepted" if config.is_cert_failure(e) else "other"
             )
             result = None
         if result and need_content:
@@ -1048,6 +1049,8 @@ elif current == 2:
                 f"{label}의 사용 한도에 도달했어요. 한도가 풀린 뒤 다시 시도하거나, "
                 "설정에서 다른 AI 서비스·키로 바꿔주세요."
             )
+        elif st.session_state.get("analysis_error_kind") == "intercepted":
+            st.error(config.intercepted_message("AI 서비스"))
         else:
             st.error("댓글을 만드는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.")
         retry_col, settings_col = st.columns(2)
