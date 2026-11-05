@@ -1,5 +1,7 @@
 streamlit==1.40.2
-playwright==1.49.1
+playwright==1.64.1
 anthropic==0.39.0
 google-api-python-client==2.154.0
 python-dotenv==1.0.1
+youtube-transcript-api==1.2.4
+PyYAML==6.0.2

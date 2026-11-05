@@ -4,8 +4,14 @@
     {
       "name": "streamlit-dashboard",
       "runtimeExecutable": "C:\\Python312\\python.exe",
-      "runtimeArgs": ["-m", "streamlit", "run", "app.py", "--server.port", "8501", "--server.headless", "true"],
-      "port": 8501
+      "runtimeArgs": ["-m", "streamlit", "run", "app.py", "--server.port", "8502", "--server.address", "localhost", "--server.headless", "true"],
+      "port": 8502
+    },
+    {
+      "name": "streamlit-fixtures",
+      "runtimeExecutable": "C:\\Python312\\python.exe",
+      "runtimeArgs": ["-m", "streamlit", "run", "app.py", "--server.port", "8504", "--server.headless", "true", "--", "--ui-dev"],
+      "port": 8504
     }
   ]
 }

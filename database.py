@@ -2,7 +2,9 @@ import sqlite3
 import os
 from datetime import date
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "data", "comments.db")
+import config
+
+DB_PATH = config.user_path("data", "comments.db")
 
 
 def _get_conn():
@@ -36,6 +38,15 @@ def can_post(video_id: str) -> tuple[bool, str]:
     return True, ""
 
 
+def get_posted_video_ids() -> set[str]:
+    conn = _get_conn()
+    rows = conn.execute(
+        "SELECT DISTINCT video_id FROM comments WHERE success = 1"
+    ).fetchall()
+    conn.close()
+    return {r["video_id"] for r in rows}
+
+
 def today_count() -> int:
     conn = _get_conn()
     row = conn.execute(
@@ -47,6 +58,8 @@ def today_count() -> int:
 
 
 def log_comment(video_id, video_title, profile_index, comment, success, error=None):
+    config.log_event("comment_post", f"success={bool(success)} videoId={video_id} account={profile_index} "
+                                     f"title={video_title} error={error} | {comment}")
     conn = _get_conn()
     conn.execute(
         "INSERT INTO comments (video_id, video_title, profile_index, comment, success, error) VALUES (?, ?, ?, ?, ?, ?)",
@@ -56,10 +69,16 @@ def log_comment(video_id, video_title, profile_index, comment, success, error=No
     conn.close()
 
 
-def get_history(limit=100):
+def get_history_by_date(target_date=None, limit=100):
     conn = _get_conn()
-    rows = conn.execute(
-        "SELECT * FROM comments ORDER BY created_at DESC LIMIT ?", (limit,)
-    ).fetchall()
+    if target_date:
+        rows = conn.execute(
+            "SELECT * FROM comments WHERE date(created_at) = ? ORDER BY created_at DESC LIMIT ?",
+            (target_date.isoformat(), limit),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM comments ORDER BY created_at DESC LIMIT ?", (limit,)
+        ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
