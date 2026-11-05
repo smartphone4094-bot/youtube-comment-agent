@@ -316,6 +316,12 @@ class FakeBrowser(_Proxy):
         return [{"index": i, "name": n, "path": "fixture"} for i, n in enumerate(names)]
 
     def post_comment(self, video_id, comment, profile_index, status_callback=None):
+        if self._mode == "one":
+            for step in ["프로필 여는 중", "영상 페이지 이동 중", "댓글 창 찾는 중", "입력 중", "게시 중"]:
+                if status_callback:
+                    status_callback(step)
+                time.sleep(0.3)
+            return {"success": True}
         return {"success": False, "error": "픽스처 모드에서는 게시하지 않습니다. " + "x" * 200}
 
 

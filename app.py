@@ -4,6 +4,7 @@ import html
 import json
 import math
 import os
+import random
 import re
 import statistics
 import sys
@@ -1226,6 +1227,7 @@ defaults = {
     "edited_comment": "",
     "posting_status": None,
     "post_result": None,
+    "last_posted_comment": None,
     # Pagination state
     "search_current_page": 1,
     "search_page_tokens": {},      # {page_number: nextPageToken}
@@ -2250,8 +2252,8 @@ elif current == 2:
 # Step 3: 댓글 게시
 # ===========================================================================
 elif current == 3:
-    # Guard: need confirmed comment and selected video
-    if not st.session_state.confirmed_comment or not st.session_state.selected_video:
+    # Guard: need confirmed comment (or a previous post result) and selected video
+    if not st.session_state.confirmed_comment and not st.session_state.post_result:
         st.warning("확정된 댓글이 없습니다. 이전 단계를 완료해주세요.")
         go_to_step(2)
 
@@ -2259,160 +2261,136 @@ elif current == 3:
     video_id = sv.get("videoId", "")
     video_title = sv.get("title", "제목 없음")
 
-    # Back button
-    if st.button("← 댓글 수정하기", key="back_to_step2"):
-        go_to_step(2)
-
-    st.subheader("댓글 게시")
-
-    # -- Show confirmed comment --
-    st.markdown("#### 확정된 댓글")
-    st.info(_plain_md(st.session_state.confirmed_comment))
-    st.markdown(
-        f'<div class="video-meta">대상 영상: <bdi>{_clean(video_title)}</bdi></div>',
-        unsafe_allow_html=True,
-    )
-
-    st.markdown("---")
-
-    # -- Profile selector --
-    st.markdown("#### 프로필 선택")
-    profiles = browser_automation.get_available_profiles()
-    if not profiles:
-        st.warning("사용 가능한 Chrome 프로필이 없습니다. 설정을 확인해주세요.")
-        profile_names = []
-        selected_profile_index = None
-    else:
-        profile_names = [p["name"] for p in profiles]
-        selected_name = st.selectbox(
-            "Chrome 프로필",
-            options=profile_names,
-            key="profile_selector",
-            label_visibility="collapsed",
-        )
-        selected_profile_index = profiles[profile_names.index(selected_name)]["index"]
-
-    st.markdown("---")
-
-    # -- Pre-posting checks --
-    st.markdown("#### 게시 전 확인")
-
-    can_post, can_post_msg = database.can_post(video_id)
-    today_posted = database.today_count()
-    daily_limit = config.daily_max_comments()
-    posts_remaining = max(0, daily_limit - today_posted)
-    quota_ok = posts_remaining > 0
-
-    if can_post:
-        st.markdown("✅ 이 영상에 댓글 가능")
-    else:
-        st.markdown(f"❌ {can_post_msg}")
-
-    if quota_ok:
-        st.markdown(
-            f"✅ 오늘 잔여 댓글 {posts_remaining}개 (사용 {today_posted}/{daily_limit})"
-        )
-    else:
-        st.markdown(f"❌ 오늘 댓글 한도 초과 ({today_posted}/{daily_limit})")
-
-    all_checks_pass = can_post and quota_ok and profiles
-
-    st.markdown("---")
-
-    # -- Post button --
-    if st.button(
-        "🚀 댓글 달기",
-        use_container_width=True,
-        type="primary",
-        disabled=not all_checks_pass,
-    ):
-        comment_text = st.session_state.confirmed_comment
-        with st.status("댓글 게시 중...", expanded=True) as status_container:
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-
-            def status_callback(msg: str):
-                """Update status display during posting."""
-                st.session_state.posting_status = msg
-                progress_map = {
-                    "프로필 여는 중": 0.1,
-                    "영상 페이지 이동 중": 0.3,
-                    "댓글 창 찾는 중": 0.5,
-                    "입력 중": 0.7,
-                    "게시 중": 0.9,
-                }
-                pval = progress_map.get(msg, 0.5)
-                progress_bar.progress(pval)
-                status_text.markdown(f"**{msg}**")
-
-            try:
-                result = browser_automation.post_comment(
-                    video_id=video_id,
-                    comment=comment_text,
-                    profile_index=selected_profile_index,
-                    status_callback=status_callback,
-                )
-                st.session_state.post_result = result
-
-                if result.get("success"):
-                    progress_bar.progress(1.0)
-                    status_text.markdown("**게시 완료!**")
-                    status_container.update(label="게시 완료!", state="complete")
-                    database.log_comment(
-                        video_id=video_id,
-                        video_title=video_title,
-                        profile_index=selected_profile_index,
-                        comment=comment_text,
-                        success=True,
-                    )
-                    st.session_state.confirmed_comment = None
-                    st.session_state.posting_status = None
-                else:
-                    error_msg = result.get("error", "알 수 없는 오류")
-                    status_container.update(label="게시 실패", state="error")
-                    database.log_comment(
-                        video_id=video_id,
-                        video_title=video_title,
-                        profile_index=selected_profile_index,
-                        comment=comment_text,
-                        success=False,
-                        error=error_msg,
-                    )
-                    st.error(f"게시 실패: {_plain_md(error_msg)}")
-
-            except Exception as e:
-                status_container.update(label="게시 실패", state="error")
-                config.log_error("post_comment", e, f"videoId={video_id}")
-                database.log_comment(
-                    video_id=video_id,
-                    video_title=video_title,
-                    profile_index=selected_profile_index,
-                    comment=comment_text,
-                    success=False,
-                    error=str(e),
-                )
-                st.error("게시 중 오류가 발생했습니다. 오류 로그를 확인해주세요.")
-
-    # -- Show previous result / success state --
-    if st.session_state.post_result and not st.session_state.confirmed_comment:
+    # Already posted — show result screen
+    if st.session_state.post_result:
         if st.session_state.post_result.get("success"):
-            st.success("댓글이 성공적으로 게시되었습니다!")
-            st.markdown("")
-            if st.button(
-                "🔄 처음으로 돌아가기 (새 영상 선택)",
+            st.markdown("### 게시완료")
+            if st.session_state.last_posted_comment:
+                st.info(_plain_md(st.session_state.last_posted_comment))
+            st.markdown(
+                f'<div class="video-meta">대상 영상: <bdi>{_clean(video_title)}</bdi></div>',
+                unsafe_allow_html=True,
+            )
+
+            today_posted = database.today_count()
+            daily_limit = config.daily_max_comments()
+            remaining = max(0, daily_limit - today_posted)
+            st.markdown(f"✅ 오늘 잔여 댓글 {remaining}개 (사용 {today_posted}/{daily_limit})")
+
+            st.link_button(
+                "댓글단 영상 보러가기",
+                f"https://www.youtube.com/watch?v={video_id}",
                 use_container_width=True,
-                key="back_to_start",
-            ):
-                # Reset for a fresh run
+            )
+
+            if st.button("🔄 처음으로 돌아가기", use_container_width=True, key="back_to_start"):
                 st.session_state.selected_video = None
                 _reset_generation()
                 st.session_state.post_result = None
                 st.session_state.posting_status = None
+                st.session_state.last_posted_comment = None
                 go_to_step(1)
         else:
-            st.error(
-                f"마지막 게시: 실패 - {_plain_md(st.session_state.post_result.get('error', ''))}"
-            )
+            # Post failed — show error with retry / back
+            error_msg = st.session_state.post_result.get("error", "알 수 없는 오류")
+            st.error(f"게시 실패: {_plain_md(error_msg)}")
+
+            retry_col, back_col = st.columns(2)
+            with retry_col:
+                if st.button("다시 시도", use_container_width=True, type="primary", key="retry_post"):
+                    st.session_state.post_result = None
+                    st.rerun()
+            with back_col:
+                if st.button("← 댓글 수정하기", use_container_width=True, key="back_to_step2_err"):
+                    st.session_state.post_result = None
+                    go_to_step(2)
+    else:
+        # Back button (shown only before posting starts)
+        if st.button("← 댓글 수정하기", key="back_to_step2"):
+            go_to_step(2)
+
+        # Pre-posting checks
+        profiles = browser_automation.get_available_profiles()
+        if not profiles:
+            st.error("연결된 Google 계정이 없습니다.")
+            if st.button("계정 연결하기", type="primary"):
+                show_login_required_dialog()
+        else:
+            can_post, can_post_msg = database.can_post(video_id)
+            if not can_post:
+                st.error(can_post_msg)
+            else:
+                today_posted = database.today_count()
+                daily_limit = config.daily_max_comments()
+                if today_posted >= daily_limit:
+                    st.error(f"오늘 댓글 한도 초과 ({today_posted}/{daily_limit})")
+                else:
+                    # All checks pass — auto-post
+                    selected_profile_index = random.choice(profiles)["index"]
+                    comment_text = st.session_state.confirmed_comment
+
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+
+                    def status_callback(msg: str):
+                        """Update status display during posting."""
+                        st.session_state.posting_status = msg
+                        progress_map = {
+                            "프로필 여는 중": 0.1,
+                            "영상 페이지 이동 중": 0.3,
+                            "댓글 창 찾는 중": 0.5,
+                            "입력 중": 0.7,
+                            "게시 중": 0.9,
+                        }
+                        progress_bar.progress(progress_map.get(msg, 0.5))
+                        status_text.markdown(f"**{msg}**")
+
+                    try:
+                        result = browser_automation.post_comment(
+                            video_id=video_id,
+                            comment=comment_text,
+                            profile_index=selected_profile_index,
+                            status_callback=status_callback,
+                        )
+                        st.session_state.post_result = result
+
+                        if result.get("success"):
+                            progress_bar.progress(1.0)
+                            status_text.markdown("**게시완료**")
+                            database.log_comment(
+                                video_id=video_id,
+                                video_title=video_title,
+                                profile_index=selected_profile_index,
+                                comment=comment_text,
+                                success=True,
+                            )
+                            st.session_state.last_posted_comment = comment_text
+                            st.session_state.confirmed_comment = None
+                            st.session_state.posting_status = None
+                        else:
+                            error_msg = result.get("error", "알 수 없는 오류")
+                            database.log_comment(
+                                video_id=video_id,
+                                video_title=video_title,
+                                profile_index=selected_profile_index,
+                                comment=comment_text,
+                                success=False,
+                                error=error_msg,
+                            )
+
+                    except Exception as e:
+                        config.log_error("post_comment", e, f"videoId={video_id}")
+                        database.log_comment(
+                            video_id=video_id,
+                            video_title=video_title,
+                            profile_index=selected_profile_index,
+                            comment=comment_text,
+                            success=False,
+                            error=str(e),
+                        )
+                        st.session_state.post_result = {"success": False, "error": str(e)}
+
+                    st.rerun()  # rerun to show result screen
 
 
 # ===========================================================================
