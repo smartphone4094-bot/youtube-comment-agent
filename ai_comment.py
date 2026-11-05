@@ -84,7 +84,7 @@ def _comment_prompt(title, analysis, angles, real_comments):
 - 댓글은 불특정 다수가 읽는 글. 끝맺음은 정해진 형태 없이 앞 문장에 어울리게 쓰고 후보마다 다르게 할 것
 - 영상 속 장면·말 중 하나를 꼭 집어서 언급 (제목을 그대로 따라 쓰지 말 것). 영상을 안 본 사람이 읽어도 무슨 얘기인지 알 수 있어야 하므로, 맥락이 필요한 대사는 그대로 따오지 말고 어떤 상황인지 풀어서 쓸 것
 - 목표: 이 댓글을 읽은 사람이 "{brand}"에서 사주를 보고 싶어지게 만들기. 내 경험이나 처지 한 마디에서 자연스럽게 이어갈 것
-- 모든 후보에 "{brand}"이라는 이름을 반드시 넣을 것. 사주 보는 곳의 이름이므로 "{brand}에서 사주 보다", "{brand}에 물어보다"처럼 쓸 것
+- 모든 후보에 "{brand}"이라는 이름을 반드시 넣을 것. "{brand}"은 찾아가는 장소가 아니라 사주 서비스의 이름이므로 그에 맞게 말할 것
 - 후보마다 아래 주제로 꺼내되, 주제의 표현을 옮겨 적지 말고 이 시청자가 실제로 할 법한 말로 쓸 것
 {angle_lines}
 - 공백 포함 {min_c}~{max_c}자, 2~3문장
@@ -116,7 +116,7 @@ def _review_prompt(candidates, real_comments, rules):
 
 ---
 당신은 한국 유튜브 댓글을 오래 읽어 온 편집자입니다. 위 룰북을 참고해 댓글 후보를 심사합니다.
-"{brand}"은 사주 보는 곳의 이름입니다.
+"{brand}"은 찾아가는 장소가 아니라 사주 서비스의 이름입니다. 장소처럼 쓴 표현은 어색한 것으로 봅니다.
 
 ## 후보
 {numbered}
@@ -132,7 +132,11 @@ def _review_prompt(candidates, real_comments, rules):
 가장 나은 후보 하나를 고르고, 그 후보에 남은 어색한 문장만 진단하세요.
 span에는 고칠 문장 전체를 후보의 글자 그대로 적고, fix에는 앞뒤 문장과 말이 이어지게 고친 문장 전체를 적으세요. 뜻은 유지하고, 어색한 곳이 없으면 problems는 빈 배열입니다. 값 안의 큰따옴표는 \\"로 적으세요.
 
-JSON만 출력: {{"best": 후보번호, "problems": [{{"span": "어색한 문장", "why": "이유", "fix": "고친 문장"}}]}}"""
+JSON만 출력: {{"best": 후보번호, "problems": [{{"span": "어색한 문장", "fix": "고친 문장"}}]}}"""
+
+
+# A stalled call blocks the switch to the next service; normal calls take 1 to 10 seconds
+_CALL_TIMEOUT = 30
 
 
 def _post_json(url: str, body: dict, headers: dict, service: str) -> dict:
@@ -143,7 +147,7 @@ def _post_json(url: str, body: dict, headers: dict, service: str) -> dict:
     # a short retry rides out the bad window.
     for attempt in range(3):
         try:
-            with urllib.request.urlopen(req, timeout=120) as resp:
+            with urllib.request.urlopen(req, timeout=_CALL_TIMEOUT) as resp:
                 return json.loads(resp.read())
         except urllib.error.HTTPError as e:
             err_body = e.read().decode(errors="replace")[:500]
@@ -158,8 +162,8 @@ def _post_json(url: str, body: dict, headers: dict, service: str) -> dict:
             exc = error(f"{service} API 오류 ({e.code}): {err_body}")
             exc.retry_after = e.headers.get("Retry-After") if e.headers else None
             raise exc
-        except urllib.error.URLError:
-            if attempt == 2:
+        except urllib.error.URLError as e:
+            if attempt == 2 or isinstance(e.reason, TimeoutError):  # another wait would only add to it
                 raise
             time.sleep(1.0 * (attempt + 1))
 
@@ -244,7 +248,7 @@ def _extract_json(text: str, required: str = "concern") -> dict:
 def _call_anthropic(prompt: str, key: str, model: str) -> str:
     import anthropic
 
-    client = anthropic.Anthropic(api_key=key)
+    client = anthropic.Anthropic(api_key=key, timeout=_CALL_TIMEOUT, max_retries=0)
     # Current Claude models always think; low effort keeps a short comment quick and cheap.
     # The installed SDK predates output_config / fallbacks, so they go through extra_body.
     # fallbacks="default" re-runs a declined request on another model inside the same call.
@@ -328,6 +332,10 @@ _DAILY_COOLDOWN = 3600
 _GONE_COOLDOWN = 86400
 _MAX_ROUNDS = 4
 _DAILY_LIMIT = re.compile(r"per[-_ ]?day|daily", re.I)
+# Side by side on real videos its Korean read better than the fast free models'; those stay
+# as the backup, and every other step still goes to whichever service answers first.
+_WRITING_SERVICE = "gemini"
+_WRITING_TRIES = 3
 
 
 def _rank_models(provider: str, key: str) -> list[str]:
@@ -337,7 +345,9 @@ def _rank_models(provider: str, key: str) -> list[str]:
         if provider == "openrouter":  # the paid models bill the user's account
             ids = [m for m in ids if m.endswith(":free")]
         prefer = config.AI_PROVIDERS[provider].get("prefer", ())
-        rank = lambda m: next((i for i, part in enumerate(prefer) if part in m), len(prefer))
+        avoid = config.AI_PROVIDERS[provider].get("avoid", ())
+        rank = lambda m: (any(part in m for part in avoid),
+                          next((i for i, part in enumerate(prefer) if part in m), len(prefer)))
         _ranked_models[provider] = sorted(ids, key=rank)  # stable: keeps the service's order within a rank
     return _ranked_models[provider]
 
@@ -372,7 +382,7 @@ def _next_model(provider: str, key: str) -> str | None:
     return next((m for m in _rank_models(provider, key) if not _is_cooling(provider, m)), None)
 
 
-def _call_model(prompt: str) -> str:
+def _call_model(prompt: str, writing: bool = False) -> str:
     """Selected service first. Any failure moves straight to the next service with a key and
     is remembered, so later calls don't spend time on it. Waiting is the last resort: only
     when everything left is rate limited and the soonest limit clears within a minute."""
@@ -380,6 +390,9 @@ def _call_model(prompt: str) -> str:
     order = list(dict.fromkeys(p for p in (selected, *config.AI_PROVIDERS) if config.ai_key(p)))
     if not order:
         raise ValueError("등록된 AI API 키가 없습니다. 상단 설정에서 키를 입력하세요.")
+    if writing and _WRITING_SERVICE in order:
+        # Listed repeatedly so a limited model falls through to the service's next one, not to a weaker writer
+        order = [_WRITING_SERVICE] * _WRITING_TRIES + order
     rate_limited = failed = None
     for _ in range(_MAX_ROUNDS):
         called = False
@@ -433,7 +446,7 @@ def _fit_length(comment: str) -> str:
 
 댓글: {comment}"""
         try:
-            shorter = _one_line(_call_model(prompt).strip('"“”'))
+            shorter = _one_line(_call_model(prompt, writing=True).strip('"“”'))
         except Exception:
             return comment
         # A rewrite only counts if it fits and still carries the brand
@@ -508,16 +521,42 @@ def _passes_gates(before: str, after: str) -> bool:
             and config.brand_name() in after and not new_numbers)
 
 
+def _read_verdict(reply: str) -> dict:
+    """The judge's reply, even if it was cut off: its choice comes first and whole fixes
+    before the cut are still good, so only a reply without a choice counts as failed."""
+    try:
+        return _extract_json(reply, "best")
+    except ValueError:
+        picked = re.search(r'"best"\s*:\s*([1-9]\d*)', reply)
+        if not picked:
+            raise
+    config.log_event("ai_review_reply", reply)
+    decoder = json.JSONDecoder()
+    problems = []
+    for match in re.finditer(r"\{", reply):
+        try:
+            found, _ = decoder.raw_decode(reply, match.start())
+        except ValueError:
+            continue
+        if isinstance(found, dict) and found.get("span"):
+            problems.append(found)
+    return {"best": int(picked.group(1)), "problems": problems}
+
+
 def _review(candidates: list[str], real_comments: list[str]) -> str:
     """Generate-then-judge, with im-not-ai's diagnose-before-rewrite (MIT,
     github.com/epoko77-ai/im-not-ai): pick one candidate, then patch only the diagnosed spans."""
+    reply = ""
     try:
-        verdict = _extract_json(_call_model(_review_prompt(candidates, real_comments, _comment_rules())), "best")
+        reply = _call_model(_review_prompt(candidates, real_comments, _comment_rules()))
+        verdict = _read_verdict(reply)
         comment = candidates[int(verdict["best"]) - 1]
     except RateLimitError:
         raise
     except Exception as e:  # a failed judge must not cost the comment already written
         config.log_error("ai_review_failed", e)
+        if reply:
+            config.log_event("ai_review_reply", reply)
         return candidates[0]
     config.log_event("comment_review", f"best={verdict.get('best')} problems={verdict.get('problems')}")
     patched = comment
@@ -538,7 +577,7 @@ def _better_of(original: str, patched: str) -> str:
     if patched == original:
         return original
     a, b = random.sample([original, patched], 2)
-    prompt = f"""한국 유튜브 댓글 두 개를 비교합니다. 소리 내어 읽는다고 생각하고 판단하세요.
+    prompt = f"""한국 유튜브 댓글 두 개를 비교합니다. 소리 내어 읽는다고 생각하고 판단하세요. "{config.brand_name()}"은 찾아가는 장소가 아니라 사주 서비스의 이름입니다.
 
 A: {a}
 B: {b}
@@ -579,7 +618,7 @@ def _write_candidates(title: str, analysis: dict, real_comments: list[str]) -> l
     angles = [a.format(brand=brand) for a in random.sample(_ANGLES, _CANDIDATES)]
     min_c, max_c = config.comment_min_chars(), config.comment_max_chars()
     for _ in range(2):
-        written = _parse_candidates(_call_model(_comment_prompt(title, analysis, angles, real_comments)))
+        written = _parse_candidates(_call_model(_comment_prompt(title, analysis, angles, real_comments), writing=True))
         config.log_event("comment_candidates", " || ".join(written))
         # Lifting a real viewer's comment would make a duplicate under the same video
         usable = [c for c in written if brand in c and not _copies_example(c) and not any(

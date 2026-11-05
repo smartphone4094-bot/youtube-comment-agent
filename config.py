@@ -26,7 +26,7 @@ AI_PROVIDERS = {
                    "shared_limit": True,  # the daily free limit covers every model on the account
                    "prefer": ("gemma", "nemotron-3.5-lightning", "nemotron")},
     "gemini": {"label": "Google Gemini", "key_url": "https://aistudio.google.com/apikey",
-               "prefer": ("gemini-flash-latest", "flash")},
+               "prefer": ("gemini-flash-latest", "flash"), "avoid": ("lite",)},
     "anthropic": {"label": "Claude (Anthropic)", "key_url": "https://console.anthropic.com/settings/keys",
                   "prefer": ("haiku", "sonnet")},
     "openai": {"label": "OpenAI", "key_url": "https://platform.openai.com/api-keys",
