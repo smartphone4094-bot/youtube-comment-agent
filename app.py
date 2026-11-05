@@ -96,6 +96,11 @@ st.markdown("""
     [data-testid="stWidgetLabel"] {
         color: var(--text);
     }
+    /* Button labels are markdown too; they take the button's own color (white on primary) */
+    .stApp button [data-testid="stMarkdownContainer"],
+    .stApp button [data-testid="stMarkdownContainer"] p {
+        color: inherit !important;
+    }
     [data-testid="stDecoration"] {
         background-image: linear-gradient(90deg, #9B8FFF, #FFB8D0) !important;
     }
