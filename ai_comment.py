@@ -21,7 +21,8 @@ class ServiceBusyError(ValueError):
     """The service failed on its side (HTTP 5xx, or no answer in the reply), usually briefly."""
 
 
-_MODEL_GONE = re.compile(r"model_not_found|does not exist|not found|not supported|no access|invalid model|not a valid model", re.I)
+_MODEL_GONE = re.compile(r"model_not_found|does not exist|not[ _]found|not supported|no access|invalid model|"
+                         r"not a valid model|no longer available|deprecated|retired", re.I)
 # Listed by the services but cannot write a chat reply
 _NOT_CHAT_MODEL = re.compile(
     r"whisper|tts|orpheus|guard|safety|transcribe|embed|image|banana|lyria|robotics|computer-use|"

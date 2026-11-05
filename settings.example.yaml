@@ -24,6 +24,6 @@ api:
     openai: ""
   ai_models:
     openrouter: nvidia/nemotron-3.5-lightning:free
-    gemini: gemini-2.5-flash
+    gemini: ""              # 비워두면 지금 쓸 수 있는 Gemini 모델 중에서 자동 선택
     anthropic: claude-opus-5-5
     openai: gpt-5-mini
