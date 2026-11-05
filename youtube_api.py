@@ -5,7 +5,6 @@ import time
 from datetime import datetime
 
 from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
 
 import config
 
@@ -13,6 +12,15 @@ import config
 def _get_service():
     """Build and return a YouTube API service client."""
     return build("youtube", "v3", developerKey=config.youtube_api_key())
+
+
+def _thumbnail_url(snippet: dict) -> str:
+    thumbnails = snippet.get("thumbnails", {})
+    return (
+        thumbnails.get("high", {}).get("url")
+        or thumbnails.get("medium", {}).get("url")
+        or thumbnails.get("default", {}).get("url", "")
+    )
 
 
 def search_videos(
@@ -52,18 +60,12 @@ def search_videos(
     videos = []
     for item in response.get("items", []):
         snippet = item["snippet"]
-        thumbnails = snippet.get("thumbnails", {})
-        thumbnail_url = (
-            thumbnails.get("high", {}).get("url")
-            or thumbnails.get("medium", {}).get("url")
-            or thumbnails.get("default", {}).get("url", "")
-        )
         videos.append({
             "videoId": item["id"]["videoId"],
             "title": snippet.get("title", ""),
             "channelTitle": snippet.get("channelTitle", ""),
             "publishedAt": snippet.get("publishedAt", ""),
-            "thumbnail": thumbnail_url,
+            "thumbnail": _thumbnail_url(snippet),
             "description": snippet.get("description", ""),
         })
 
@@ -96,27 +98,18 @@ def get_video_details(video_id: str) -> dict | None:
         item = items[0]
         snippet = item["snippet"]
         statistics = item.get("statistics", {})
-        thumbnails = snippet.get("thumbnails", {})
-        thumbnail_url = (
-            thumbnails.get("high", {}).get("url")
-            or thumbnails.get("medium", {}).get("url")
-            or thumbnails.get("default", {}).get("url", "")
-        )
 
         return {
             "videoId": video_id,
             "title": snippet.get("title", ""),
             "channelTitle": snippet.get("channelTitle", ""),
             "publishedAt": snippet.get("publishedAt", ""),
-            "thumbnail": thumbnail_url,
+            "thumbnail": _thumbnail_url(snippet),
             "description": snippet.get("description", ""),
             "viewCount": statistics.get("viewCount", "0"),
             "commentCount": statistics.get("commentCount", "0"),
         }
 
-    except HttpError as e:
-        config.log_error("get_video_details", e)
-        return None
     except Exception as e:
         config.log_error("get_video_details", e)
         return None
@@ -147,34 +140,9 @@ def get_popular_comments(video_id: str, max_results: int = 10) -> list[dict]:
             })
         return comments
 
-    except HttpError as e:
-        config.log_error("get_popular_comments", e)
-        return []
     except Exception as e:
         config.log_error("get_popular_comments", e)
         return []
-
-
-def get_video_captions(video_id: str) -> str | None:
-    """Get Korean captions/transcript for a video.
-
-    Tries youtube-transcript-api first. Falls back to the video description
-    if the transcript library is unavailable or no Korean transcript exists.
-    Returns None if nothing is available.
-    """
-    transcript = get_transcript(video_id)
-    if transcript:
-        return transcript
-
-    # Fallback: return the video description
-    try:
-        details = get_video_details(video_id)
-        if details and details.get("description"):
-            return details["description"]
-    except Exception:
-        pass
-
-    return None
 
 
 def _clean_caption(text: str) -> str:
@@ -228,92 +196,6 @@ def _fetch_transcript(api, video_id: str) -> str | None:
 
     text = _clean_caption(" ".join(snippet.text for snippet in transcript.fetch()))
     return text or None
-
-
-def search_trending_videos(keyword: str = "연애", max_results: int = 10) -> dict:
-    """Search for videos that are about to trend.
-
-    Criteria: 1,000~5,000 views uploaded within the last 24 hours,
-    implying a growth rate of roughly 150+ views/hour.
-    Returns the same dict shape as search_videos (with ``videos`` list and
-    ``nextPageToken``).  Trending search does not paginate through YouTube
-    API pages because it needs statistics filtering, so ``nextPageToken``
-    is always ``None``.
-    """
-    try:
-        from datetime import timedelta, timezone
-
-        service = _get_service()
-        after = (datetime.now(timezone.utc) - timedelta(hours=24)).strftime(
-            "%Y-%m-%dT%H:%M:%SZ"
-        )
-
-        response = (
-            service.search()
-            .list(
-                q=keyword,
-                part="snippet",
-                type="video",
-                maxResults=50,
-                order="viewCount",
-                regionCode="KR",
-                relevanceLanguage="ko",
-                publishedAfter=after,
-            )
-            .execute()
-        )
-
-        video_ids = [item["id"]["videoId"] for item in response.get("items", [])]
-        if not video_ids:
-            return {"videos": [], "nextPageToken": None}
-
-        stats_response = (
-            service.videos()
-            .list(id=",".join(video_ids), part="snippet,statistics")
-            .execute()
-        )
-
-        now_utc = datetime.now(timezone.utc)
-        results = []
-        for item in stats_response.get("items", []):
-            stats = item.get("statistics", {})
-            snippet = item["snippet"]
-            view_count = int(stats.get("viewCount", "0"))
-            published = datetime.fromisoformat(
-                snippet["publishedAt"].replace("Z", "+00:00")
-            )
-            hours_since = max((now_utc - published).total_seconds() / 3600, 1)
-            views_per_hour = view_count / hours_since
-
-            if 1000 <= view_count <= 5000 and views_per_hour >= 150:
-                thumbnails = snippet.get("thumbnails", {})
-                thumbnail_url = (
-                    thumbnails.get("high", {}).get("url")
-                    or thumbnails.get("medium", {}).get("url")
-                    or thumbnails.get("default", {}).get("url", "")
-                )
-                results.append(
-                    {
-                        "videoId": item["id"],
-                        "title": snippet.get("title", ""),
-                        "channelTitle": snippet.get("channelTitle", ""),
-                        "publishedAt": snippet.get("publishedAt", ""),
-                        "thumbnail": thumbnail_url,
-                        "description": snippet.get("description", ""),
-                        "viewCount": str(view_count),
-                        "viewsPerHour": round(views_per_hour),
-                    }
-                )
-
-        results.sort(key=lambda v: v["viewsPerHour"], reverse=True)
-        return {"videos": results[:max_results], "nextPageToken": None}
-
-    except HttpError as e:
-        config.log_error("search_trending_videos", e)
-        return {"videos": [], "nextPageToken": None}
-    except Exception as e:
-        config.log_error("search_trending_videos", e)
-        return {"videos": [], "nextPageToken": None}
 
 
 def extract_video_id(url: str) -> str | None:

@@ -121,6 +121,7 @@ streamlit run app.py
 
 ```
 ├── app.py                    # Streamlit 메인 대시보드 (3단계 위저드)
+├── styles.css                # 대시보드 스타일 (app.py가 불러옴)
 ├── ai_comment.py             # AI 댓글 생성 파이프라인 (분석→작성→심사→윤문)
 ├── browser_automation.py     # Playwright 크롬 자동화 (로그인·게시)
 ├── youtube_api.py            # YouTube Data API v3 연동

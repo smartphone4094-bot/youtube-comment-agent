@@ -210,7 +210,7 @@ def save_profiles(profiles: list[dict]):
 
 # App-owned Chrome profiles hold Google login sessions, so they live outside the repository.
 _MANAGED_PROFILES_DIR = os.path.join(
-    os.getenv("LOCALAPPDATA") or os.path.join(os.path.dirname(__file__), "data"),
+    os.getenv("LOCALAPPDATA") or os.path.join(_ROOT, "data"),
     "MarketingAIAgent",
     "chrome_profiles",
 )
@@ -232,8 +232,8 @@ def remove_managed_profile(path: str):
 # ---------------------------------------------------------------------------
 # Error logging
 # ---------------------------------------------------------------------------
-_ERROR_LOG_PATH = os.path.join(os.path.dirname(__file__), "data", "error.log")
-_ACTIVITY_LOG_PATH = os.path.join(os.path.dirname(__file__), "data", "activity.log")
+_ERROR_LOG_PATH = os.path.join(_ROOT, "data", "error.log")
+_ACTIVITY_LOG_PATH = os.path.join(_ROOT, "data", "activity.log")
 
 
 def _ensure_log_dir():
@@ -271,18 +271,6 @@ def _append_line(path: str, line: str):
             f.write(line + "\n")
     except OSError:
         pass
-
-
-def read_error_log(limit: int = 50) -> list[str]:
-    """Read the most recent *limit* lines from the error log."""
-    if not os.path.isfile(_ERROR_LOG_PATH):
-        return []
-    try:
-        with open(_ERROR_LOG_PATH, encoding="utf-8") as f:
-            lines = f.readlines()
-        return [l.rstrip() for l in lines[-limit:]]
-    except OSError:
-        return []
 
 
 def read_error_log_by_date(target_date=None, limit: int = 50) -> list[str]:
@@ -327,7 +315,7 @@ def read_chrome_profile_info(profile_path: str) -> dict:
             prefs = json.load(f)
 
         account_info = prefs.get("account_info", [])
-        if account_info and isinstance(account_info, list) and len(account_info) > 0:
+        if account_info and isinstance(account_info, list):
             first = account_info[0]
             result["name"] = first.get("full_name", "")
             result["email"] = first.get("email", "")

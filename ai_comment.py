@@ -177,6 +177,15 @@ def _empty(service: str, reason) -> ValueError:
     return ServiceBusyError(f"{service} 응답이 비어있습니다 (finish_reason={reason})")
 
 
+def _chat_content(data: dict, service: str) -> str:
+    """The answer text of an OpenAI-style chat completion."""
+    choice = data["choices"][0]
+    content = (choice["message"].get("content") or "").strip()
+    if not content:
+        raise _empty(service, choice.get("finish_reason"))
+    return content
+
+
 def _call_openrouter(prompt: str, key: str, model: str) -> str:
     data = _post_json(
         "https://openrouter.ai/api/v1/chat/completions",
@@ -191,12 +200,8 @@ def _call_openrouter(prompt: str, key: str, model: str) -> str:
         {"Authorization": f"Bearer {key}"},
         "OpenRouter",
     )
-    choice = data["choices"][0]
-    content = (choice["message"].get("content") or "").strip()
-    if not content:
-        # The reasoning text is never the answer, so it is not used as a fallback.
-        raise _empty("OpenRouter", choice.get("finish_reason"))
-    return content
+    # The reasoning text is never the answer, so it is not used as a fallback.
+    return _chat_content(data, "OpenRouter")
 
 
 def _call_gemini(prompt: str, key: str, model: str) -> str:
@@ -229,11 +234,7 @@ def _call_openai(prompt: str, key: str, model: str) -> str:
         {"Authorization": f"Bearer {key}"},
         "OpenAI",
     )
-    choice = data["choices"][0]
-    content = (choice["message"].get("content") or "").strip()
-    if not content:
-        raise _empty("OpenAI", choice.get("finish_reason"))
-    return content
+    return _chat_content(data, "OpenAI")
 
 
 def _extract_json(text: str, required: str = "concern") -> dict:
@@ -291,11 +292,7 @@ def _compatible_caller(provider: str):
             {"Authorization": f"Bearer {key}", "User-Agent": "marketing-ai-agent/1.0"},
             config.AI_PROVIDERS[provider]["label"],
         )
-        choice = data["choices"][0]
-        content = (choice["message"].get("content") or "").strip()
-        if not content:
-            raise _empty(config.AI_PROVIDERS[provider]["label"], choice.get("finish_reason"))
-        return content
+        return _chat_content(data, config.AI_PROVIDERS[provider]["label"])
     return call
 
 
@@ -652,11 +649,9 @@ def generate_comment(title: str, description: str, captions: str | None, popular
     if not config.comment_min_chars() <= len(comment) <= config.comment_max_chars():
         comment = _fix_quotes(_fit_length(comment))
 
-    result = {"concern": analysis.get("concern", ""), "comment": comment,
-              "reasoning": " / ".join(str(s) for s in (analysis.get("scenes") or [])[:3])}
-    comment_len = len(result["comment"])
+    comment_len = len(comment)
+    warning = None
     if comment_len < config.comment_min_chars() or comment_len > config.comment_max_chars():
-        result["warning"] = f"댓글 길이 {comment_len}자 (기준: {config.comment_min_chars()}~{config.comment_max_chars()}자)"
-    config.log_event("comment_done", f"{comment_len}자 warning={result.get('warning')} | {comment}")
-
-    return result
+        warning = f"댓글 길이 {comment_len}자 (기준: {config.comment_min_chars()}~{config.comment_max_chars()}자)"
+    config.log_event("comment_done", f"{comment_len}자 warning={warning} | {comment}")
+    return {"concern": analysis.get("concern", ""), "comment": comment}

@@ -69,15 +69,6 @@ def log_comment(video_id, video_title, profile_index, comment, success, error=No
     conn.close()
 
 
-def get_history(limit=100):
-    conn = _get_conn()
-    rows = conn.execute(
-        "SELECT * FROM comments ORDER BY created_at DESC LIMIT ?", (limit,)
-    ).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
-
-
 def get_history_by_date(target_date=None, limit=100):
     conn = _get_conn()
     if target_date:

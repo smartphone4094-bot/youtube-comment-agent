@@ -108,9 +108,6 @@ class FakeYouTube(_Proxy):
             {"text": "**굵게** <b>태그</b> $1 $2", "likeCount": 0, "author": ""},
         ]
 
-    def get_video_captions(self, video_id):
-        return None
-
     def get_transcript(self, video_id):
         time.sleep(1.5)  # real caption fetches take a moment; keeps the loading popup visible
         if self._mode == "empty":
@@ -331,8 +328,6 @@ class FakeAI(_Proxy):
         return {
             "concern": "상대방의연락이갑자기줄어들어서불안해하는고민이영상전체에걸쳐공백없이이어지고있습니다" * 3 + " **마크다운** $1 $2",
             "comment": "저도 비슷한 고민이 있었는데 운명원에서 상담받고 마음이 많이 편해졌어요. " * 2,
-            "reasoning": "분석 근거 " * 80,
-            "warning": "브랜드 언급이 너무 직접적일 수 있습니다. " * 6,
         }
 
 

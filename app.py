@@ -45,1170 +45,8 @@ if "--ui-dev" in sys.argv:
 # ---------------------------------------------------------------------------
 # Custom CSS
 # ---------------------------------------------------------------------------
-st.markdown("""
-<style>
-    @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css");
-
-    /* Palette: soft lavender (sazasaju.com colors), tuned for text contrast.
-       The toolbar is hidden, so Streamlit's theme always follows the system scheme. */
-    :root {
-        --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
-        --bg: #FDFBF7;
-        --bg-glow: #EFE9FF;
-        --card: #FFFFFF;
-        --surface: #F5F2FF;
-        --surface-strong: #ECE7FF;
-        --text: #2D2B3D;
-        --text-secondary: #6B6978;
-        --hairline: #E8E6EF;
-        --fill: #F5F2FF;
-        --border-strong: #DCD6FF;
-        /* One accent, reserved for the main action on each screen */
-        --accent: #7B6FDF;
-        --accent-hover: #6B5FCF;
-        --accent-text: #6B5FCF;
-        --accent-ring: rgba(155, 143, 255, 0.38);
-        --accent-shadow: rgba(123, 111, 223, 0.5);
-        --card-shadow: 0 6px 20px -8px rgba(60, 40, 120, 0.18);
-        --soft-shadow: 0 4px 20px rgba(155, 143, 255, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
-        --font-system: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
-            "Apple SD Gothic Neo", "Segoe UI", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
-    }
-    @media (prefers-color-scheme: dark) {
-        :root {
-            --bg: #1A1625;
-            --bg-glow: #2D2550;
-            --card: #241F35;
-            --surface: #2A2438;
-            --surface-strong: #352D4D;
-            --text: #F5F0FF;
-            --text-secondary: #A7A3B5;
-            --hairline: #3D3555;
-            --fill: #2A2438;
-            --border-strong: #4D4470;
-            --accent-text: #B8AFFF;
-            --accent-shadow: rgba(0, 0, 0, 0.5);
-            --card-shadow: 0 6px 20px -8px rgba(0, 0, 0, 0.5);
-        }
-    }
-
-    /* ── Surfaces ── */
-    .stApp {
-        background: linear-gradient(180deg, var(--bg-glow) 0, var(--bg) 440px) var(--bg) !important;
-        color: var(--text);
-    }
-    .stApp [data-testid="stMarkdownContainer"],
-    .stApp h1, .stApp h2, .stApp h3,
-    [data-testid="stWidgetLabel"] {
-        color: var(--text);
-    }
-    /* Button labels are markdown too; they take the button's own color (white on primary) */
-    .stApp button [data-testid="stMarkdownContainer"],
-    .stApp button [data-testid="stMarkdownContainer"] p {
-        color: inherit !important;
-    }
-    /* ── Header: ink wordmark, only the brand name in purple; account button on the same row ── */
-    .app-header {
-        display: flex;
-        align-items: center;
-        min-height: 44px;
-    }
-    .stApp h1.app-title {
-        margin: 0 !important;
-        padding: 0 !important;
-        font-size: clamp(1.5rem, 4.2vw, 1.9rem) !important;
-        font-weight: 800 !important;
-        letter-spacing: -0.035em;
-        color: var(--text) !important;
-    }
-    .app-title .brand-name {
-        color: var(--accent);
-    }
-    .app-title a {
-        display: none !important;
-    }
-    @media (prefers-color-scheme: dark) {
-        .app-title .brand-name { color: #B8AFFF; }
-    }
-    [data-testid="stHorizontalBlock"]:has(.app-header) {
-        flex-wrap: nowrap !important;
-        align-items: center;
-    }
-    [data-testid="stHorizontalBlock"]:has(.app-header) > [data-testid="stColumn"] {
-        min-width: 0 !important;
-        width: auto !important;
-        flex: 1 1 0 !important;
-    }
-    [data-testid="stHorizontalBlock"]:has(.app-header) > [data-testid="stColumn"]:last-child {
-        flex: 0 0 6.5rem !important;
-    }
-    [data-testid="stHorizontalBlock"]:has(.app-header) > [data-testid="stColumn"]:nth-child(2) {
-        flex: 0 0 6.5rem !important;
-    }
-    /* The settings button is the account button's twin: same pill, size, ink and shadow
-       (selector outranks the generic secondary-button rule, which made it purple and taller) */
-    .st-key-open_settings .stButton button[kind="secondary"] {
-        min-height: 40px;
-        height: 40px;
-        padding: 4px 12px !important;
-        border-radius: 20px !important;
-        background: var(--card) !important;
-        border: 1px solid var(--border-strong) !important;
-        color: var(--text) !important;
-        box-shadow: 0 3px 12px rgba(138, 124, 240, 0.12);
-        white-space: nowrap;
-    }
-    .st-key-open_settings .stButton button p {
-        font-size: 1rem !important;
-        font-weight: 600 !important;
-    }
-    @media (max-width: 480px) {
-        /* Icon only on phones, so the title keeps its room */
-        [data-testid="stHorizontalBlock"]:has(.app-header) > [data-testid="stColumn"]:nth-child(2) {
-            flex: 0 0 2.9rem !important;
-        }
-        .st-key-open_settings button p { display: none; }
-        .st-key-open_settings button { padding-inline: 0 !important; }
-    }
-    /* ── Settings popup: same flat look as before; only the rhythm is set ──
-       field-to-field 16px, a 28px break before each new section title, 6px under it */
-    [role="dialog"] [data-testid="stVerticalBlock"] {
-        gap: 16px;
-    }
-    .settings-section {
-        margin: 12px 0 -10px;
-        font-size: 0.8rem;
-        font-weight: 800;
-        letter-spacing: 0.02em;
-        color: var(--accent-text);
-    }
-    [role="dialog"] [data-testid="stElementContainer"]:first-child .settings-section,
-    [role="dialog"] [data-testid="stAlert"] + * .settings-section {
-        margin-top: 0;
-    }
-    /* Number fields: the global input style rounded only the text part and left the −/+
-       on a grey slab; make the whole thing one control like the other fields */
-    [data-testid="stNumberInputContainer"] {
-        border: 1px solid var(--border-strong);
-        border-radius: 12px;
-        background: var(--card);
-        overflow: hidden;
-        transition: border-color 150ms ease, box-shadow 150ms ease;
-    }
-    [data-testid="stNumberInputContainer"]:focus-within {
-        border-color: var(--accent);
-        box-shadow: 0 0 0 3px var(--accent-ring);
-    }
-    [data-testid="stNumberInputContainer"] [data-baseweb="input"] {
-        border: none !important;
-        border-radius: 0 !important;
-        background: transparent !important;
-        box-shadow: none !important;
-    }
-    [data-testid="stNumberInputContainer"] button {
-        background: transparent !important;
-        border: none !important;
-        border-radius: 0 !important;
-        color: var(--text-secondary) !important;
-    }
-    @media (hover: hover) and (pointer: fine) {
-        [data-testid="stNumberInputContainer"] button:hover:not(:disabled) {
-            background: var(--surface) !important;
-            color: var(--accent-text) !important;
-        }
-    }
-
-    /* ── Search box: pill with a label, a divider, and a search icon ──
-       All three sit in the box's own flex row, centered together, instead of being
-       pinned with top:50% + translate, which rounds to a different pixel than the text
-       under display scaling. */
-    .st-key-keyword_input [data-baseweb="input"] {
-        min-height: 52px;
-        align-items: center;
-        border-radius: 9999px !important;
-        padding-inline: 1.25rem 1.1rem;
-        box-shadow: 0 3px 12px rgba(138, 124, 240, 0.1);
-    }
-    .st-key-keyword_input [data-baseweb="input"]::before {
-        content: "키워드";
-        flex: none;
-        padding-right: 0.85rem;
-        font-size: 0.92rem;
-        font-weight: 700;
-        line-height: 22px;
-        letter-spacing: -0.01em;
-        color: var(--accent-text);
-        pointer-events: none;
-    }
-    .st-key-keyword_input [data-baseweb="input"]::after {
-        content: "";
-        flex: none;
-        width: 20px;
-        height: 20px;
-        margin-left: 0.6rem;
-        background: var(--accent-text);
-        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") center / contain no-repeat;
-        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") center / contain no-repeat;
-        pointer-events: none;
-    }
-    /* The divider between the mark and the text */
-    .st-key-keyword_input [data-baseweb="input"] > div:first-child {
-        align-self: center;
-        height: 22px;
-        border-left: 1.5px solid var(--border-strong) !important;
-        border-radius: 0 !important;
-    }
-    .st-key-keyword_input input {
-        height: 22px;
-        padding-block: 0 !important;
-        padding-left: 0.85rem !important;
-        font-size: 1rem !important;
-        font-weight: 500;
-        line-height: 22px !important;
-    }
-    .st-key-keyword_input input::placeholder {
-        color: var(--text-secondary);
-        opacity: 1;
-    }
-
-    [data-testid="stDecoration"] {
-        background-image: linear-gradient(90deg, #9B8FFF, #FFB8D0) !important;
-    }
-    /* Only the bordered row container itself: its own block directly holds the thumbnail/info columns */
-    [data-testid="stVerticalBlockBorderWrapper"]:has(> div > [data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"] .video-title:not(.full)) {
-        background: var(--card);
-        border: 1px solid var(--hairline) !important;
-        border-radius: 16px !important;
-        box-shadow: var(--card-shadow);
-        padding: 20px !important;
-        transition: border-color 150ms ease, box-shadow 200ms var(--ease-out);
-    }
-    @media (hover: hover) and (pointer: fine) {
-        [data-testid="stVerticalBlockBorderWrapper"]:has(> div > [data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"] .video-title:not(.full)):hover {
-            border-color: var(--border-strong) !important;
-            box-shadow: 0 10px 28px -10px rgba(60, 40, 120, 0.26);
-        }
-    }
-    /* Alerts take the palette: info is lavender, the rest stay semantic but soft */
-    [data-testid="stAlertContainer"] {
-        border-radius: 14px !important;
-    }
-    [data-testid="stAlertContainer"]:has([data-testid="stAlertContentInfo"]) {
-        background: var(--surface) !important;
-        border: 1px solid var(--border-strong);
-    }
-    [data-testid="stAlertContentInfo"],
-    [data-testid="stAlertContentInfo"] [data-testid="stMarkdownContainer"] {
-        color: var(--text) !important;
-    }
-
-    /* ── Page chrome ── */
-    .stDeployButton,
-    [data-testid="stToolbar"],
-    [data-testid="stHeaderActionElements"] {
-        display: none !important;
-    }
-    [data-testid="stHeader"] {
-        background: transparent !important;
-        pointer-events: none;
-    }
-    [data-testid="stMainBlockContainer"] {
-        max-width: 960px;
-        margin-inline: auto;
-        padding-top: 2.25rem !important;
-        padding-bottom: 6rem !important;
-    }
-    /* Breathing room between stacked elements */
-    [data-testid="stMainBlockContainer"] [data-testid="stVerticalBlock"] {
-        gap: 1.25rem;
-    }
-
-    /* ── Typography: tracking and leading follow size ── */
-    .stApp, .stApp *:not([data-testid="stIconMaterial"]):not(code):not(pre):not(.log-line):not(.log-line *) {
-        font-family: var(--font-system) !important;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-    }
-    .stApp h1 {
-        font-size: clamp(1.75rem, 5vw, 2.5rem) !important;
-        font-weight: 700 !important;
-        line-height: 1.1 !important;
-        letter-spacing: -0.02em;
-        word-break: keep-all;
-        overflow-wrap: anywhere;
-    }
-    .stApp h2, .stApp h3 {
-        line-height: 1.25 !important;
-        letter-spacing: -0.015em;
-        word-break: keep-all;
-    }
-    .stApp h3 {
-        font-size: 1.5rem !important;
-        font-weight: 700 !important;
-        padding-top: 0.75rem !important;
-        padding-bottom: 0 !important;
-    }
-    /* Streamlit pulls the next element up under headings; let the block gap do the spacing */
-    [data-testid="stHeading"] [data-testid="stMarkdownContainer"] {
-        margin-bottom: 0 !important;
-    }
-    /* Streamlit's -1rem cancels a closing paragraph's margin. Our HTML blocks (cards, tags)
-       have no closing paragraph, so the -1rem pulled the next card up to 2px away. */
-    .stApp [data-testid="stMarkdownContainer"]:not(:has(> p:last-child, > ul:last-child, > ol:last-child)) {
-        margin-bottom: 0 !important;
-    }
-    [data-testid="stWidgetLabel"] p {
-        font-size: 0.85rem !important;
-        font-weight: 600 !important;
-    }
-    [data-testid="stMarkdownContainer"] {
-        word-break: keep-all;
-        overflow-wrap: anywhere;
-    }
-
-    /* ── Buttons: feedback lands on press, release settles ── */
-    .stButton button,
-    [data-testid="stPopover"] button {
-        border-radius: 12px !important;
-        font-weight: 600 !important;
-        transition: transform 160ms var(--ease-out), background-color 150ms ease,
-            border-color 150ms ease, color 150ms ease, box-shadow 150ms ease !important;
-    }
-    .stButton button {
-        min-height: 44px;
-        padding: 0.55rem 1.1rem !important;
-    }
-    .stButton button p {
-        font-size: 0.95rem !important;
-        font-weight: 700 !important;
-    }
-    /* Primary: solid accent with a soft lift */
-    .stButton button[kind="primary"] {
-        background: var(--accent) !important;
-        border: 1px solid var(--accent) !important;
-        color: #fff !important;
-        box-shadow: 0 8px 20px -8px var(--accent-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.18);
-    }
-    @media (hover: hover) and (pointer: fine) {
-        .stButton button[kind="primary"]:hover:not(:disabled) {
-            background: var(--accent-hover) !important;
-            border-color: var(--accent-hover) !important;
-            box-shadow: 0 10px 24px -8px var(--accent-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.18);
-        }
-    }
-    /* Secondary: lavender outline on a card surface, fills on hover */
-    .stButton button[kind="secondary"] {
-        background: var(--card) !important;
-        border: 1px solid var(--border-strong) !important;
-        color: var(--accent-text) !important;
-    }
-    @media (hover: hover) and (pointer: fine) {
-        .stButton button[kind="secondary"]:hover:not(:disabled) {
-            background: var(--surface) !important;
-            border-color: var(--accent) !important;
-        }
-    }
-    .stButton button:focus-visible {
-        outline: none !important;
-        box-shadow: 0 0 0 3px var(--accent-ring) !important;
-    }
-    /* Disabled: clearly present, clearly unavailable */
-    .stButton button:disabled {
-        background: var(--fill) !important;
-        border: 1px dashed var(--border-strong) !important;
-        color: var(--text-secondary) !important;
-        box-shadow: none !important;
-        cursor: not-allowed;
-        opacity: 1 !important;
-    }
-    .stButton button:active:not(:disabled),
-    [data-testid="stPopover"] button:active:not(:disabled) {
-        transform: scale(0.97);
-        transition-duration: 60ms !important;
-    }
-
-    /* ── Inputs ── */
-    [data-baseweb="input"],
-    [data-baseweb="textarea"],
-    [data-baseweb="select"] > div {
-        border-radius: 12px !important;
-        background: var(--card) !important;
-        border: 1px solid var(--border-strong) !important;
-        transition: border-color 150ms ease, box-shadow 150ms ease;
-    }
-    [data-baseweb="input"] > div,
-    [data-baseweb="input"] input,
-    [data-baseweb="textarea"] > div,
-    [data-baseweb="textarea"] textarea {
-        background: transparent !important;
-        color: var(--text) !important;
-    }
-    [data-baseweb="input"]:focus-within,
-    [data-baseweb="textarea"]:focus-within,
-    [data-baseweb="select"] > div:focus-within {
-        border-color: var(--accent) !important;
-        box-shadow: 0 0 0 3px var(--accent-ring);
-    }
-    .stExpander details {
-        background: var(--card);
-    }
-
-    hr {
-        margin: 0.75rem 0 !important;
-        border-color: var(--hairline) !important;
-    }
-    [data-testid="stExpander"] summary {
-        padding-block: 0.8rem !important;
-    }
-    [data-testid="stAlert"] [data-testid="stMarkdownContainer"] p {
-        line-height: 1.65;
-    }
-    .stExpander details {
-        border-radius: 12px !important;
-        border-color: var(--hairline) !important;
-    }
-    [data-testid="stAlert"] > div {
-        border-radius: 12px;
-    }
-
-    /* ── Video rows ── */
-    [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] .thumb) {
-        gap: 1.25rem;
-    }
-    .thumb {
-        position: relative;
-        aspect-ratio: 16 / 9;
-        border-radius: 12px;
-        overflow: hidden;
-        background: var(--fill);
-    }
-    /* A clickable thumbnail: an invisible button laid over it opens the video popup;
-       hover dims the image and shows a play badge */
-    [data-testid="stVerticalBlock"]:has(> [class*="st-key-play_"]) {
-        position: relative;
-    }
-    [class*="st-key-play_"] {
-        position: absolute !important;
-        inset: 0;
-        z-index: 2;
-    }
-    [class*="st-key-play_"].stElementContainer .stButton {
-        position: absolute !important;
-        inset: 0 !important;
-    }
-    [class*="st-key-play_"].stElementContainer .stButton,
-    [class*="st-key-play_"].stElementContainer .stButton div,
-    [class*="st-key-play_"].stElementContainer .stButton button[kind] {
-        width: 100% !important;
-        height: 100% !important;
-    }
-    [class*="st-key-play_"].stElementContainer .stButton button[kind] {
-        min-height: 0 !important;
-        padding: 0 !important;
-        border: none !important;
-        border-radius: 12px !important;
-        background: transparent !important;
-        box-shadow: none !important;
-        color: transparent !important;
-        cursor: pointer;
-    }
-    [class*="st-key-play_"].stElementContainer .stButton button[kind] p { opacity: 0; }
-    [data-testid="stVerticalBlock"]:has(> [class*="st-key-play_"]) .bg-image {
-        transition: transform 200ms var(--ease-out);
-    }
-    [data-testid="stVerticalBlock"]:has(> [class*="st-key-play_"]) .thumb::after {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background:
-            url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Ccircle cx='24' cy='24' r='22' fill='white' fill-opacity='0.92'/%3E%3Cpath d='M20 16.5v15l12-7.5z' fill='%237B6FDF'/%3E%3C/svg%3E")
-            center / 44px no-repeat,
-            rgba(26, 22, 37, 0.28);
-        opacity: 0;
-        transition: opacity 160ms ease;
-    }
-    @media (hover: hover) and (pointer: fine) {
-        [data-testid="stVerticalBlock"]:has(> [class*="st-key-play_"]:hover) .thumb::after { opacity: 1; }
-        [data-testid="stVerticalBlock"]:has(> [class*="st-key-play_"]:hover) .bg-image { transform: scale(1.03); }
-    }
-    [data-testid="stVerticalBlock"]:has(> [class*="st-key-play_"] button:focus-visible) .thumb {
-        box-shadow: 0 0 0 3px var(--accent-ring);
-    }
-    @media (prefers-reduced-motion: reduce) {
-        [data-testid="stVerticalBlock"]:has(> [class*="st-key-play_"]) .bg-image,
-        [data-testid="stVerticalBlock"]:has(> [class*="st-key-play_"]) .thumb::after { transition: none; }
-    }
-    .thumb::before {
-        content: "▶";
-        position: absolute;
-        inset: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.1rem;
-        color: var(--text-secondary);
-    }
-    .bg-image {
-        position: absolute;
-        inset: 0;
-        background-position: center;
-        background-repeat: no-repeat;
-        background-size: cover;
-    }
-    .video-title {
-        font-size: 0.95rem;
-        font-weight: 600;
-        line-height: 1.35;
-        margin-bottom: 4px;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-    }
-    .video-title.full {
-        font-size: 1.05rem;
-        display: block;
-    }
-    .video-meta {
-        font-size: 0.8rem;
-        line-height: 1.5;
-        color: var(--text-secondary);
-        margin-bottom: 0.5rem;
-        font-variant-numeric: tabular-nums;
-    }
-    .video-posted {
-        font-size: 0.85rem;
-        color: var(--text-secondary);
-    }
-
-    /* ── Step 2 loading popup ── */
-    .loading-overlay {
-        position: fixed;
-        inset: 0;
-        z-index: 999990;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 16px;
-        background: rgba(26, 22, 37, 0.28);
-        -webkit-backdrop-filter: blur(6px) saturate(140%);
-        backdrop-filter: blur(6px) saturate(140%);
-        animation: surface-fade 160ms ease;
-    }
-    .loading-modal {
-        width: min(340px, 100%);
-        padding: 28px 28px 24px;
-        border-radius: 20px;
-        background: var(--card);
-        border: 1px solid var(--hairline);
-        box-shadow: 0 24px 70px rgba(60, 40, 120, 0.22), 0 6px 18px rgba(0, 0, 0, 0.08);
-        text-align: center;
-        animation: surface-in 220ms var(--ease-out);
-    }
-    .loading-spinner {
-        width: 40px;
-        height: 40px;
-        margin: 0 auto 16px;
-        border-radius: 50%;
-        border: 3px solid var(--surface-strong);
-        border-top-color: var(--accent);
-        animation: loading-spin 800ms linear infinite;
-    }
-    .loading-title {
-        font-size: 1.02rem;
-        font-weight: 700;
-        letter-spacing: -0.015em;
-        color: var(--text);
-        word-break: keep-all;
-    }
-    .loading-steps {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-        margin-top: 12px;
-        font-size: 0.78rem;
-        font-weight: 600;
-        color: var(--text-secondary);
-        font-variant-numeric: tabular-nums;
-    }
-    .loading-steps span:last-child {
-        margin-left: 4px;
-    }
-    .loading-dot {
-        width: 18px;
-        height: 4px;
-        border-radius: 999px;
-        background: var(--surface-strong);
-        transition: background-color 200ms ease;
-    }
-    .loading-dot.on {
-        background: var(--accent);
-    }
-    .loading-hint {
-        margin: 10px 0 0 !important;
-        font-size: 0.8rem;
-        color: var(--text-secondary);
-    }
-    .loading-hint strong {
-        margin-right: 6px;
-        font-weight: 700;
-        color: var(--text);
-    }
-    /* Live elapsed counter (CSS only: the overlay is markdown, no JS). Browsers without
-       @property leave --eta-on unset, so the var() fallback 0 collapses the span and
-       only the static estimate shows. */
-    @property --eta-sec { syntax: '<integer>'; inherits: false; initial-value: 0; }
-    @property --eta-on { syntax: '<integer>'; inherits: false; initial-value: 1; }
-    .loading-eta-count {
-        display: inline-block;
-        overflow: hidden;
-        white-space: nowrap;
-        vertical-align: bottom;
-        max-width: calc(var(--eta-on, 0) * 12em);
-        counter-reset: eta var(--eta-sec);
-        animation: eta-tick 120s steps(120, end) forwards;
-    }
-    .loading-eta-count::after {
-        content: "· " counter(eta) "초 경과";
-        padding-right: 6px;
-    }
-    @keyframes eta-tick {
-        from { --eta-sec: 0; }
-        to { --eta-sec: 120; }
-    }
-    @keyframes loading-spin {
-        to { transform: rotate(360deg); }
-    }
-    /* The previous screen's leftovers stay hidden while the popup is up */
-    .stApp:has(.loading-overlay) [data-stale="true"],
-    .stApp:has(.loading-overlay) [data-testid="stVerticalBlockBorderWrapper"]:has([data-stale="true"]):not(:has([data-stale="false"])),
-    .stApp:has(.loading-overlay) [data-testid="stHorizontalBlock"]:has([data-stale="true"]):not(:has([data-stale="false"])) {
-        visibility: hidden;
-    }
-    @media (prefers-reduced-motion: reduce) {
-        .loading-spinner { animation-duration: 2400ms; }
-        .loading-overlay, .loading-modal { animation: none; }
-        .loading-eta-count { display: none; }
-    }
-
-    /* ── Step 2 cards (section / featured), after sazasaju.com/fortune ── */
-    .section-card,
-    [data-testid="stVerticalBlockBorderWrapper"]:has(> div > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"] .comment-card-head) {
-        background: var(--card);
-        border: 1px solid var(--hairline) !important;
-        border-radius: 20px !important;
-        padding: 24px !important;
-        box-shadow: var(--soft-shadow);
-    }
-    /* Inside the comment card: a tighter rhythm than between cards */
-    [data-testid="stVerticalBlockBorderWrapper"]:has(> div > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"] .comment-card-head) [data-testid="stVerticalBlock"] {
-        gap: 14px;
-    }
-    .section-head h4 {
-        margin: 0 !important;
-        padding: 0 !important;
-        font-size: 1.15rem !important;
-        font-weight: 700 !important;
-        letter-spacing: -0.02em;
-        line-height: 1.4 !important;
-        color: var(--text);
-    }
-    .section-head p {
-        margin: 2px 0 0 !important;
-        font-size: 0.85rem;
-        font-weight: 500;
-        color: var(--text-secondary);
-    }
-    .section-card .section-head {
-        margin-bottom: 12px;
-    }
-    /* Video content: a plain white card, title then up to 7 lines that scroll */
-    .content-head {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 12px;
-    }
-    .content-head h4 {
-        margin: 0 !important;
-        padding: 0 !important;
-        font-size: 1.15rem !important;
-        font-weight: 800 !important;
-        letter-spacing: -0.02em;
-        line-height: 1.4 !important;
-        color: var(--text);
-    }
-    .content-tag {
-        padding: 2px 8px;
-        border-radius: 999px;
-        background: var(--surface-strong);
-        color: var(--accent-text);
-        font-size: 0.72rem;
-        font-weight: 700;
-        white-space: nowrap;
-    }
-    .content-text {
-        --line: 1.85em;
-        max-height: calc(var(--line) * 7);
-        overflow-y: auto;
-        padding-right: 6px;
-        font-size: 0.95rem;
-        line-height: var(--line);
-        color: var(--text-secondary);
-        white-space: pre-wrap;
-        overscroll-behavior: contain;
-        scrollbar-width: thin;
-        scrollbar-color: var(--border-strong) transparent;
-    }
-    .content-text::-webkit-scrollbar { width: 6px; }
-    .content-text::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; }
-    .content-text:focus-visible {
-        outline: none;
-        box-shadow: 0 0 0 3px var(--accent-ring);
-        border-radius: 8px;
-    }
-    .section-empty {
-        font-size: 0.9rem;
-        color: var(--text-secondary);
-    }
-    /* The concern: a solid purple card, small light label over the quoted line, centered */
-    .feature-card {
-        padding: 22px 24px 24px;
-        border-radius: 20px;
-        background: var(--accent);
-        box-shadow: 0 10px 24px -12px var(--accent-shadow);
-        text-align: center;
-    }
-    .feature-label {
-        font-size: 0.8rem;
-        font-weight: 700;
-        letter-spacing: 0.01em;
-        color: rgba(255, 255, 255, 0.78);
-        margin-bottom: 8px;
-    }
-    .feature-text {
-        font-size: 1.25rem;
-        font-weight: 800;
-        line-height: 1.5;
-        letter-spacing: -0.02em;
-        color: #fff;
-        word-break: keep-all;
-        overflow-wrap: anywhere;
-        text-wrap: balance;
-    }
-    .count-row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 0.82rem;
-        color: var(--text-secondary);
-        font-variant-numeric: tabular-nums;
-    }
-    .count-chip {
-        display: inline-flex;
-        align-items: center;
-        padding: 3px 10px;
-        border-radius: 9999px;
-        font-weight: 700;
-    }
-    .count-chip.ok { background: var(--surface-strong); color: var(--accent-text); }
-    .count-chip.bad { background: rgba(232, 72, 76, 0.14); color: #C0282D; }
-    /* Row buttons sit short at the bottom-right of the card instead of spanning it */
-    [class*="st-key-select_"],
-    [class*="st-key-resume_"] {
-        display: flex;
-        justify-content: flex-end;
-    }
-    [class*="st-key-select_"] .stButton,
-    [class*="st-key-resume_"] .stButton {
-        width: auto !important;
-        margin-left: auto;
-    }
-    /* Stretch the info column to the thumbnail's height so the button can sink to the bottom */
-    [data-testid="stColumn"]:has(> [data-testid="stVerticalBlockBorderWrapper"] > div > [data-testid="stVerticalBlock"] > :is([class*="st-key-select_"], [class*="st-key-resume_"])) {
-        align-self: stretch;
-    }
-    [data-testid="stColumn"]:has(> [data-testid="stVerticalBlockBorderWrapper"] > div > [data-testid="stVerticalBlock"] > :is([class*="st-key-select_"], [class*="st-key-resume_"])) > [data-testid="stVerticalBlockBorderWrapper"],
-    [data-testid="stColumn"]:has(> [data-testid="stVerticalBlockBorderWrapper"] > div > [data-testid="stVerticalBlock"] > :is([class*="st-key-select_"], [class*="st-key-resume_"])) > [data-testid="stVerticalBlockBorderWrapper"] > div,
-    [data-testid="stVerticalBlock"]:has(> :is([class*="st-key-select_"], [class*="st-key-resume_"])) {
-        height: 100%;
-    }
-    [class*="st-key-select_"],
-    [class*="st-key-resume_"] {
-        margin-top: auto;
-    }
-    [class*="st-key-select_"] button {
-        min-width: 96px;
-        padding-inline: 1.4rem !important;
-    }
-
-    /* ── Status badge ── */
-    .status-badge {
-        display: inline-flex;
-        align-items: center;
-        padding: 4px 10px;
-        border-radius: 8px;
-        font-size: 0.82rem;
-        font-weight: 700;
-        letter-spacing: -0.01em;
-        white-space: nowrap;
-        font-variant-numeric: tabular-nums;
-    }
-    /* White tag like the account button beside it; only the count carries color.
-       Running low / used up turn the count and the tail orange / red. */
-    .status-badge {
-        background: var(--card);
-        border: 1px solid var(--hairline);
-        box-shadow: var(--soft-shadow);
-        color: var(--text-secondary);
-    }
-    .status-ok b { color: var(--accent-text); }
-    .status-warn b, .status-warn .status-tail { color: #9A5B00; }
-    .status-full b, .status-full .status-tail { color: #C0282D; }
-    @media (prefers-color-scheme: dark) {
-        .status-warn b, .status-warn .status-tail { color: #FFC56B; }
-        .status-full b, .status-full .status-tail { color: #FF8A8D; }
-    }
-    .status-badge b {
-        font-weight: 800;
-        margin-left: 0.25em;
-    }
-    .status-dot {
-        margin: 0 0.4em;
-        opacity: 0.55;
-    }
-    [data-testid="stPopover"] button,
-    [data-testid="stPopover"] button * {
-        white-space: nowrap;
-    }
-
-    /* ── Step indicator: a translucent layer content scrolls beneath ── */
-    [data-testid="stElementContainer"]:has(.step-bar) {
-        position: sticky;
-        top: 0.75rem;
-        z-index: 30;
-        pointer-events: none;
-    }
-    .step-bar {
-        display: flex;
-        width: fit-content;
-        max-width: 100%;
-        align-items: center;
-        gap: 4px;
-        margin: 0.75rem auto 1rem;
-        padding: 5px;
-        background: color-mix(in srgb, Canvas 72%, transparent);
-        -webkit-backdrop-filter: blur(20px) saturate(180%);
-        backdrop-filter: blur(20px) saturate(180%);
-        border-radius: 999px;
-        box-shadow: 0 0 0 1px var(--hairline);
-    }
-    .step-item {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 6px 16px 6px 7px;
-        border-radius: 999px;
-        font-size: 0.85rem;
-        font-weight: 500;
-        color: var(--text-secondary);
-        white-space: nowrap;
-        transition: background-color 200ms var(--ease-out), color 200ms var(--ease-out);
-    }
-    /* A soft lavender tint for "you are here"; the solid accent stays on the action buttons */
-    .step-item.active {
-        background: var(--surface-strong);
-        color: var(--accent-text);
-        font-weight: 700;
-    }
-    .step-item.completed {
-        color: #28a745;
-    }
-    .step-connector {
-        width: 10px;
-        height: 2px;
-        border-radius: 999px;
-        background: var(--hairline);
-        flex-shrink: 0;
-    }
-    .step-num {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 24px;
-        height: 24px;
-        border-radius: 50%;
-        font-size: 0.75rem;
-        font-weight: 600;
-        background: var(--fill);
-        flex-shrink: 0;
-        font-variant-numeric: tabular-nums;
-    }
-    .step-item.active .step-num {
-        background: var(--accent);
-        color: #fff;
-    }
-    .step-item.completed .step-num {
-        background: #28a745;
-        color: #fff;
-    }
-    @media (max-width: 480px) {
-        .step-item:not(.active) { padding: 6px 7px; }
-        .step-item:not(.active) .step-label { display: none; }
-    }
-
-    /* ── Profile popover: its transform is the position, so it must not be animated ── */
-    [data-testid="stPopover"] button {
-        border-radius: 20px !important;
-        background: var(--card) !important;
-        border: 1px solid var(--border-strong) !important;
-        color: var(--text) !important;
-        box-shadow: 0 3px 12px rgba(138, 124, 240, 0.12);
-    }
-    [data-testid="stPopoverBody"] {
-        width: min(420px, calc(100vw - 24px)) !important;
-        min-width: 0 !important;
-        max-width: calc(100vw - 24px) !important;
-        border-radius: 14px !important;
-        box-shadow: 0 10px 38px rgba(0, 0, 0, 0.14), 0 4px 12px rgba(0, 0, 0, 0.08) !important;
-    }
-    .profile-popover-header {
-        font-size: 0.95rem;
-        font-weight: 600;
-        margin-bottom: 2px;
-    }
-    .profile-count {
-        margin-left: 4px;
-        font-size: 0.78rem;
-        font-weight: 700;
-        color: var(--accent-text);
-        font-variant-numeric: tabular-nums;
-    }
-    .profile-popover-hint {
-        font-size: 0.8rem;
-        color: var(--text-secondary);
-        margin-bottom: 12px;
-        line-height: 1.55;
-    }
-    .profile-item-divider {
-        border: none;
-        border-top: 1px solid var(--hairline);
-        margin: 10px 0 8px 0 !important;
-    }
-    .profile-empty-state {
-        text-align: center;
-        padding: 20px 8px;
-        color: var(--text-secondary);
-        font-size: 0.875rem;
-    }
-    [data-testid="stPopoverBody"] [data-testid="stHorizontalBlock"]:has(.profile-account-card) {
-        flex-wrap: nowrap !important;
-        align-items: center;
-    }
-    [data-testid="stPopoverBody"] [data-testid="stHorizontalBlock"]:has(.profile-account-card) > [data-testid="stColumn"] {
-        min-width: 0 !important;
-        width: auto !important;
-        flex: 1 1 0 !important;
-    }
-    [data-testid="stPopoverBody"] [data-testid="stHorizontalBlock"]:has(.profile-account-card) > [data-testid="stColumn"]:last-child {
-        flex: 0 0 2.75rem !important;
-    }
-    .profile-account-card {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 8px;
-        border-radius: 10px;
-        transition: background-color 150ms ease;
-    }
-    @media (hover: hover) and (pointer: fine) {
-        .profile-account-card:hover {
-            background: var(--fill);
-        }
-    }
-    .profile-avatar {
-        position: relative;
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        overflow: hidden;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1rem;
-        font-weight: 600;
-        color: #fff;
-        flex-shrink: 0;
-    }
-    .profile-avatar.color-1 { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-    .profile-avatar.color-2 { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
-    .profile-avatar.color-3 { background: linear-gradient(135deg, #4facfe 0%, #00a8e8 100%); }
-    .profile-avatar.color-4 { background: linear-gradient(135deg, #2bb673 0%, #1fa2a2 100%); }
-    .profile-avatar.color-5 { background: linear-gradient(135deg, #fa709a 0%, #f5a623 100%); }
-    .profile-account-info {
-        flex: 1;
-        min-width: 0;
-    }
-    .profile-account-name,
-    .profile-account-email {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    .profile-account-name {
-        font-size: 0.9rem;
-        font-weight: 600;
-    }
-    .profile-account-email {
-        font-size: 0.8rem;
-        color: var(--text-secondary);
-    }
-
-    /* ── Pagination ── */
-    [data-testid="stHorizontalBlock"]:has(.pagination-info) {
-        flex-wrap: nowrap !important;
-        align-items: center;
-    }
-    [data-testid="stHorizontalBlock"]:has(.pagination-info) > [data-testid="stColumn"] {
-        min-width: 0 !important;
-        width: auto !important;
-        flex: 1 1 0 !important;
-    }
-    .pagination-info {
-        font-size: 0.9rem;
-        font-weight: 500;
-        color: var(--text-secondary);
-        text-align: center;
-        white-space: nowrap;
-        font-variant-numeric: tabular-nums;
-    }
-
-    /* ── Dialogs: dim to focus, surface materializes ── */
-    [data-testid="stDialog"] {
-        background: transparent !important;
-        -webkit-backdrop-filter: blur(6px) saturate(140%);
-        backdrop-filter: blur(6px) saturate(140%);
-    }
-    [data-testid="stDialog"] > div {
-        background: rgba(0, 0, 0, 0.38) !important;
-    }
-    [data-testid="stDialog"] [role="dialog"] {
-        border-radius: 18px;
-        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28), 0 6px 18px rgba(0, 0, 0, 0.12);
-        animation: surface-in 220ms var(--ease-out);
-    }
-    [role="dialog"] [data-testid="stVerticalBlock"] {
-        width: 100% !important;
-    }
-    [role="dialog"] [data-testid="stHorizontalBlock"]:has(.stDateInput) {
-        flex-wrap: nowrap !important;
-        align-items: center;
-        gap: 0.5rem;
-    }
-    [role="dialog"] [data-testid="stHorizontalBlock"]:has(.stDateInput) > [data-testid="stColumn"] {
-        min-width: 0 !important;
-        width: auto !important;
-        flex: 0 0 3rem !important;
-    }
-    [role="dialog"] [data-testid="stHorizontalBlock"]:has(.stDateInput) > [data-testid="stColumn"]:nth-child(2) {
-        flex: 1 1 0 !important;
-    }
-    .dialog-count {
-        font-size: 0.8rem;
-        color: var(--text-secondary);
-        font-variant-numeric: tabular-nums;
-    }
-    .record {
-        padding: 12px 0;
-        border-bottom: 1px solid var(--hairline);
-    }
-    .record:last-child {
-        border-bottom: none;
-    }
-    .record-title {
-        display: flex;
-        gap: 6px;
-        font-size: 0.92rem;
-        font-weight: 600;
-        line-height: 1.35;
-    }
-    .record-meta {
-        font-size: 0.78rem;
-        color: var(--text-secondary);
-        margin: 2px 0 4px;
-        font-variant-numeric: tabular-nums;
-    }
-    .record-comment {
-        font-size: 0.875rem;
-        line-height: 1.5;
-        display: -webkit-box;
-        -webkit-line-clamp: 3;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-    }
-    .record-error {
-        font-size: 0.8rem;
-        line-height: 1.5;
-        color: #dc3545;
-        margin-top: 4px;
-    }
-    .log-line {
-        font-family: ui-monospace, SFMono-Regular, Consolas, "Malgun Gothic", monospace;
-        font-size: 0.78rem;
-        line-height: 1.55;
-        padding: 10px 0;
-        word-break: normal;
-        overflow-wrap: anywhere;
-        border-bottom: 1px solid var(--hairline);
-    }
-    .log-line:last-child {
-        border-bottom: none;
-    }
-
-    @keyframes surface-in {
-        from { opacity: 0; transform: scale(0.97); }
-        to { opacity: 1; transform: scale(1); }
-    }
-    @keyframes surface-fade {
-        from { opacity: 0; }
-        to { opacity: 1; }
-    }
-
-    /* ── Accessibility preferences ── */
-    @media (prefers-reduced-motion: reduce) {
-        .stButton button:active:not(:disabled),
-        [data-testid="stPopover"] button:active:not(:disabled) {
-            transform: none;
-        }
-        [data-testid="stDialog"] [role="dialog"] {
-            animation: surface-fade 150ms ease;
-        }
-    }
-    @media (prefers-reduced-transparency: reduce) {
-        .step-bar,
-        [data-testid="stDialog"] {
-            -webkit-backdrop-filter: none;
-            backdrop-filter: none;
-        }
-        .step-bar {
-            background: Canvas;
-        }
-        [data-testid="stDialog"] > div {
-            background: rgba(0, 0, 0, 0.6) !important;
-        }
-    }
-    @media (prefers-contrast: more) {
-        :root {
-            --text-secondary: currentColor;
-            --hairline: currentColor;
-        }
-        .step-bar {
-            border: 1px solid currentColor;
-        }
-    }
-</style>
-""", unsafe_allow_html=True)
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "styles.css"), encoding="utf-8") as _css:
+    st.markdown(f"<style>\n{_css.read()}</style>", unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
@@ -1225,7 +63,6 @@ defaults = {
     "analysis_error": False,       # generation failed; wait for a retry instead of looping
     "confirmed_comment": None,
     "edited_comment": "",
-    "posting_status": None,
     "post_result": None,
     "last_posted_comment": None,
     # Pagination state
@@ -1234,7 +71,6 @@ defaults = {
     "search_pages_cache": {},      # {page_number: list[dict]}
     "search_total_results": 0,
     "search_has_more": False,
-    "search_mode": "",             # "search" or "trending"
     "login_notice": None,          # (st.toast | st.warning | st.error name, message)
 }
 for key, val in defaults.items():
@@ -1270,10 +106,6 @@ def _background_image(url) -> str:
     return f'<div class="bg-image" style="background-image:url(&quot;{safe_url}&quot;)"></div>' if url else ""
 
 
-def _thumb_html(url) -> str:
-    return f'<div class="thumb">{_background_image(url)}</div>'
-
-
 def _valid_video_id(video_id: str) -> bool:
     return bool(video_id) and re.fullmatch(r"[A-Za-z0-9_-]{6,20}", video_id) is not None
 
@@ -1295,7 +127,7 @@ def show_video_dialog(video_id: str, title: str):
 
 def _thumbnail(url, video_id: str, title: str, key: str):
     """The thumbnail; with a valid video id it is clickable and plays the video in a popup."""
-    st.markdown(_thumb_html(url), unsafe_allow_html=True)
+    st.markdown(f'<div class="thumb">{_background_image(url)}</div>', unsafe_allow_html=True)
     if _valid_video_id(video_id):
         if st.button("영상 보기", key=f"play_{key}", help="영상 보기"):
             show_video_dialog(video_id, title)
@@ -1509,8 +341,8 @@ if "profiles_list" not in st.session_state:
     st.session_state.profiles_list = config.load_profiles()
 
 # Title row: the account button sits at the title's right end
-_profiles_list = st.session_state.profiles_list
-_profile_count = len(_profiles_list)
+profiles_list = st.session_state.profiles_list
+_profile_count = len(profiles_list)
 
 _title_col, _settings_col, _profile_col = st.columns([6, 1, 1])
 with _settings_col:
@@ -1525,7 +357,6 @@ with _title_col:
         unsafe_allow_html=True,
     )
 with _profile_col:
-    profiles_list = _profiles_list
     with st.popover(f"👤 {_profile_count}", use_container_width=True):
         st.markdown(
             f'<div class="profile-popover-header">Google 계정 관리 '
@@ -1589,7 +420,6 @@ with _profile_col:
                         profiles_list.pop(i)
                         config.save_profiles(profiles_list)
                         config.remove_managed_profile(p_path)
-                        st.session_state.profiles_list = profiles_list
                         st.rerun()
 
                 if i < len(profiles_list) - 1:
@@ -1670,7 +500,6 @@ def _reset_pagination():
     st.session_state.search_pages_cache = {}
     st.session_state.search_total_results = 0
     st.session_state.search_has_more = False
-    st.session_state.search_mode = ""
 
 
 def _render_scroll_anchor():
@@ -1784,6 +613,56 @@ def _reset_generation():
     st.session_state.pop("comment_edit_area", None)
 
 
+_POST_PROGRESS = {
+    "프로필 여는 중": 0.1,
+    "영상 페이지 이동 중": 0.3,
+    "댓글 창 찾는 중": 0.5,
+    "입력 중": 0.7,
+    "게시 중": 0.9,
+}
+
+
+def _auto_post(profiles: list[dict], video_id: str, video_title: str):
+    """Post the confirmed comment from a random connected account, record it, show the result."""
+    profile_index = random.choice(profiles)["index"]
+    comment_text = st.session_state.confirmed_comment
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+
+    def status_callback(msg: str):
+        progress_bar.progress(_POST_PROGRESS.get(msg, 0.5))
+        status_text.markdown(f"**{msg}**")
+
+    try:
+        result = browser_automation.post_comment(
+            video_id=video_id,
+            comment=comment_text,
+            profile_index=profile_index,
+            status_callback=status_callback,
+        )
+    except Exception as e:
+        config.log_error("post_comment", e, f"videoId={video_id}")
+        result = {"success": False, "error": str(e)}
+    st.session_state.post_result = result
+
+    success = bool(result.get("success"))
+    if success:
+        progress_bar.progress(1.0)
+        status_text.markdown("**게시완료**")
+    database.log_comment(
+        video_id=video_id,
+        video_title=video_title,
+        profile_index=profile_index,
+        comment=comment_text,
+        success=success,
+        error=None if success else result.get("error", "알 수 없는 오류"),
+    )
+    if success:
+        st.session_state.last_posted_comment = comment_text
+        st.session_state.confirmed_comment = None
+    st.rerun()  # rerun to show result screen
+
+
 # ===========================================================================
 # Step 1: 영상 불러오기
 # ===========================================================================
@@ -1824,7 +703,6 @@ if current == 1:
                         st.session_state.videos = videos_page
                         st.session_state.search_pages_cache[1] = videos_page
                         st.session_state.search_current_page = 1
-                        st.session_state.search_mode = "search"
                         st.session_state.search_total_results = result.get("totalResults", 0)
                         if next_token:
                             st.session_state.search_page_tokens[2] = next_token
@@ -2286,7 +1164,6 @@ elif current == 3:
                 st.session_state.selected_video = None
                 _reset_generation()
                 st.session_state.post_result = None
-                st.session_state.posting_status = None
                 st.session_state.last_posted_comment = None
                 go_to_step(1)
         else:
@@ -2324,72 +1201,7 @@ elif current == 3:
                 if today_posted >= daily_limit:
                     st.error(f"오늘 댓글 한도 초과 ({today_posted}/{daily_limit})")
                 else:
-                    # All checks pass — auto-post
-                    selected_profile_index = random.choice(profiles)["index"]
-                    comment_text = st.session_state.confirmed_comment
-
-                    progress_bar = st.progress(0)
-                    status_text = st.empty()
-
-                    def status_callback(msg: str):
-                        """Update status display during posting."""
-                        st.session_state.posting_status = msg
-                        progress_map = {
-                            "프로필 여는 중": 0.1,
-                            "영상 페이지 이동 중": 0.3,
-                            "댓글 창 찾는 중": 0.5,
-                            "입력 중": 0.7,
-                            "게시 중": 0.9,
-                        }
-                        progress_bar.progress(progress_map.get(msg, 0.5))
-                        status_text.markdown(f"**{msg}**")
-
-                    try:
-                        result = browser_automation.post_comment(
-                            video_id=video_id,
-                            comment=comment_text,
-                            profile_index=selected_profile_index,
-                            status_callback=status_callback,
-                        )
-                        st.session_state.post_result = result
-
-                        if result.get("success"):
-                            progress_bar.progress(1.0)
-                            status_text.markdown("**게시완료**")
-                            database.log_comment(
-                                video_id=video_id,
-                                video_title=video_title,
-                                profile_index=selected_profile_index,
-                                comment=comment_text,
-                                success=True,
-                            )
-                            st.session_state.last_posted_comment = comment_text
-                            st.session_state.confirmed_comment = None
-                            st.session_state.posting_status = None
-                        else:
-                            error_msg = result.get("error", "알 수 없는 오류")
-                            database.log_comment(
-                                video_id=video_id,
-                                video_title=video_title,
-                                profile_index=selected_profile_index,
-                                comment=comment_text,
-                                success=False,
-                                error=error_msg,
-                            )
-
-                    except Exception as e:
-                        config.log_error("post_comment", e, f"videoId={video_id}")
-                        database.log_comment(
-                            video_id=video_id,
-                            video_title=video_title,
-                            profile_index=selected_profile_index,
-                            comment=comment_text,
-                            success=False,
-                            error=str(e),
-                        )
-                        st.session_state.post_result = {"success": False, "error": str(e)}
-
-                    st.rerun()  # rerun to show result screen
+                    _auto_post(profiles, video_id, video_title)
 
 
 # ===========================================================================
