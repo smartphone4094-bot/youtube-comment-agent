@@ -101,32 +101,50 @@ st.markdown("""
     .stApp button [data-testid="stMarkdownContainer"] p {
         color: inherit !important;
     }
-    /* ── Brand mark: a bold, slanted 운 in the accent gradient ── */
-    .brand-mark {
+    /* ── Header: app-icon tile + brand eyebrow + title ── */
+    .app-header {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 0.5rem;
+    }
+    .brand-tile {
+        flex-shrink: 0;
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        width: 56px;
+        height: 56px;
+        border-radius: 16px;
+        background: linear-gradient(145deg, #A99FFF 0%, #8B7FEF 50%, #6F62D6 100%);
+        box-shadow: 0 10px 24px -10px rgba(123, 111, 223, 0.7),
+            inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -2px 6px rgba(60, 40, 140, 0.18);
+    }
+    .brand-tile > span {
+        color: #fff;
+        font-size: 1.75rem;
         font-weight: 900;
-        font-style: normal;
         line-height: 1;
         letter-spacing: -0.04em;
         transform: skewX(-9deg);
-        background: linear-gradient(160deg, #B8AFFF 0%, #9B8FFF 45%, #7B6FDF 100%);
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
+        text-shadow: 0 1px 2px rgba(60, 40, 140, 0.25);
     }
-    .app-title {
-        display: flex;
-        align-items: center;
-        gap: 0.6rem;
+    .app-header-text {
+        min-width: 0;
     }
-    .app-title .brand-mark {
-        font-size: 1.15em;
-        padding-right: 0.05em;
+    .stApp h1.app-title {
+        margin: 0 !important;
+        padding: 0 !important;
+        font-size: clamp(1.6rem, 4.6vw, 2.25rem) !important;
+        font-weight: 800 !important;
+        letter-spacing: -0.03em;
     }
     .app-title a {
         display: none !important;
+    }
+    @media (max-width: 480px) {
+        .brand-tile { width: 46px; height: 46px; border-radius: 14px; }
+        .brand-tile > span { font-size: 1.45rem; }
     }
 
     /* ── Search box: pill with the brand mark, a divider, and a search icon ── */
@@ -962,8 +980,11 @@ if "profiles_list" not in st.session_state:
     st.session_state.profiles_list = config.load_profiles()
 
 st.markdown(
-    '<h1 class="app-title"><span class="brand-mark" aria-hidden="true">운</span>'
-    '<span>마케팅AI 에이전트 (운명원)</span></h1>',
+    '<div class="app-header">'
+    '<span class="brand-tile" aria-hidden="true"><span>운</span></span>'
+    '<div class="app-header-text">'
+    '<h1 class="app-title">마케팅AI 에이전트</h1>'
+    '</div></div>',
     unsafe_allow_html=True,
 )
 
@@ -1123,16 +1144,25 @@ def _reset_pagination():
     st.session_state.search_mode = ""
 
 
-def _scroll_to_top():
-    # The nonce changes the iframe's content so the script runs again on every page turn.
-    st.session_state.scroll_nonce = st.session_state.get("scroll_nonce", 0) + 1
+def _render_scroll_anchor():
+    """Scroll to the top when a page turn asked for it.
+
+    Always rendered as the page's last element: inserting it only on some runs shifts the
+    elements after it, and Streamlit briefly shows the stale copies (a doubled pagination row).
+    Unchanged content keeps the iframe as is; a new nonce reloads it and runs the scroll.
+    """
+    if st.session_state.pop("scroll_to_top", False):
+        st.session_state.scroll_nonce = st.session_state.get("scroll_nonce", 0) + 1
+    nonce = st.session_state.get("scroll_nonce", 0)
     components.html(
         f"""<script>
-        // nonce {st.session_state.scroll_nonce}
-        const doc = window.parent.document;
-        doc.querySelectorAll('[data-testid="stMain"], [data-testid="stAppViewContainer"], section.main')
-            .forEach(el => el.scrollTo({{top: 0, behavior: "smooth"}}));
-        window.parent.scrollTo({{top: 0, behavior: "smooth"}});
+        // nonce {nonce}
+        if ({nonce} > 0) {{
+            const doc = window.parent.document;
+            doc.querySelectorAll('[data-testid="stMain"], [data-testid="stAppViewContainer"], section.main')
+                .forEach(el => el.scrollTo({{top: 0, behavior: "smooth"}}));
+            window.parent.scrollTo({{top: 0, behavior: "smooth"}});
+        }}
         </script>""",
         height=0,
     )
@@ -1314,9 +1344,6 @@ if current == 1:
                                 _select_video(video)
                             else:
                                 show_login_required_dialog()
-
-        if st.session_state.pop("scroll_to_top", False):
-            _scroll_to_top()
 
         # --- Pagination controls ---
         can_prev = cur_page > 1
@@ -1795,3 +1822,5 @@ with _log_col:
     if st.button("🔧 오류 로그", use_container_width=True, key="open_log"):
         st.session_state.log_date = date.today()
         show_error_log_dialog()
+
+_render_scroll_anchor()
