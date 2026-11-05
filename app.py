@@ -368,8 +368,7 @@ st.markdown("""
         min-width: 0;
     }
     .profile-account-name,
-    .profile-account-email,
-    .profile-account-path {
+    .profile-account-email {
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -380,10 +379,6 @@ st.markdown("""
     }
     .profile-account-email {
         font-size: 0.8rem;
-        color: var(--text-secondary);
-    }
-    .profile-account-path {
-        font-size: 0.72rem;
         color: var(--text-secondary);
     }
 
@@ -554,8 +549,7 @@ defaults = {
     "search_total_results": 0,
     "search_has_more": False,
     "search_mode": "",             # "search" or "trending"
-    # Profile add form state
-    "show_add_profile_form": False,
+    "login_notice": None,          # (st.toast | st.warning | st.error name, message)
 }
 for key, val in defaults.items():
     if key not in st.session_state:
@@ -598,6 +592,80 @@ def _video_meta(*parts) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Google login
+# ---------------------------------------------------------------------------
+def _google_login_button(location: str):
+    if browser_automation.google_login_status():
+        st.button("로그인 진행 중…", key=f"google_login_{location}", use_container_width=True, disabled=True)
+        return
+    if st.button(
+        "Google 계정으로 로그인",
+        key=f"google_login_{location}",
+        use_container_width=True,
+        type="primary",
+        icon=":material/login:",
+    ):
+        try:
+            browser_automation.start_google_login()
+        except Exception as e:
+            config.log_error("start_google_login", e)
+            st.session_state.login_notice = (
+                "error", "Chrome을 열 수 없습니다. Google Chrome이 설치되어 있는지 확인해주세요."
+            )
+        st.rerun()
+
+
+def _save_google_account(account: dict):
+    profiles = st.session_state.profiles_list
+    for i, profile in enumerate(profiles):
+        if account["email"] and profile.get("email", "").lower() == account["email"].lower():
+            config.remove_managed_profile(profile.get("path", ""))
+            profiles[i] = account
+            break
+    else:
+        profiles.append(account)
+    config.save_profiles(profiles)
+
+
+def _finish_google_login():
+    with st.spinner("계정 정보를 확인하는 중..."):
+        try:
+            account = browser_automation.finish_google_login()
+        except Exception as e:
+            config.log_error("finish_google_login", e)
+            st.session_state.login_notice = ("error", "계정 정보를 확인하지 못했습니다. 다시 로그인해주세요.")
+            return
+    if not account:
+        st.session_state.login_notice = (
+            "warning", "로그인이 확인되지 않아 계정을 연결하지 않았습니다. 로그인한 뒤 Chrome 창을 닫아주세요."
+        )
+        return
+    _save_google_account(account)
+    label = _plain_md(account["name"] or account["email"])
+    st.session_state.login_notice = ("toast", f"{label} 계정이 연결되었습니다.")
+
+
+@st.fragment(run_every=2)
+def _google_login_watcher():
+    if browser_automation.google_login_status() != "open":
+        _finish_google_login()
+        st.rerun()
+    message_col, cancel_col = st.columns([5, 1])
+    with message_col:
+        st.info("열린 Chrome 창에서 Google에 로그인한 뒤, **그 창을 닫으면** 계정이 연결됩니다.")
+    with cancel_col:
+        if st.button("취소", key="cancel_google_login", use_container_width=True):
+            browser_automation.cancel_google_login()
+            st.rerun()
+
+
+@st.dialog("로그인이 필요합니다")
+def show_login_required_dialog():
+    st.markdown("댓글을 게시하려면 Google 계정을 먼저 연결해야 합니다.")
+    _google_login_button("dialog")
+
+
+# ---------------------------------------------------------------------------
 # Initialize Chrome profiles & Header with profile popover
 # ---------------------------------------------------------------------------
 if "profiles_list" not in st.session_state:
@@ -637,7 +705,7 @@ with _profile_col:
             '<div class="profile-popover-header">Google 계정 관리</div>'
             '<div class="profile-popover-hint">'
             '댓글 게시에 사용할 Google 계정을 연결하세요.<br>'
-            'Chrome 프로필 경로를 자동으로 감지하거나 직접 입력할 수 있습니다.'
+            '버튼을 누르면 Chrome에서 Google 로그인 페이지가 열립니다.'
             '</div>',
             unsafe_allow_html=True,
         )
@@ -647,7 +715,7 @@ with _profile_col:
             st.markdown(
                 '<div class="profile-empty-state">'
                 '연결된 계정이 없습니다.<br>'
-                '아래 버튼으로 Google 계정을 연결해주세요.'
+                '아래 버튼으로 Google에 로그인해주세요.'
                 '</div>',
                 unsafe_allow_html=True,
             )
@@ -676,11 +744,6 @@ with _profile_col:
                     f'<bdi>{_clean(secondary)}</bdi></div>'
                     if secondary else ""
                 )
-                path_short = p_path.replace("\\", "/").rstrip("/").split("/")[-1] if p_path else ""
-                path_line = (
-                    f'<div class="profile-account-path">{_clean(path_short)}</div>'
-                    if path_short else ""
-                )
 
                 card_col, del_col = st.columns([6, 1])
                 with card_col:
@@ -690,7 +753,7 @@ with _profile_col:
                         f'<div class="profile-account-info">'
                         f'<div class="profile-account-name" title="{_clean(primary)}">'
                         f'<bdi>{_clean(primary)}</bdi></div>'
-                        f'{email_line}{path_line}'
+                        f'{email_line}'
                         f'</div></div>',
                         unsafe_allow_html=True,
                     )
@@ -698,6 +761,7 @@ with _profile_col:
                     if st.button("✕", key=f"pdel_{i}", help="계정 연결 해제"):
                         profiles_list.pop(i)
                         config.save_profiles(profiles_list)
+                        config.remove_managed_profile(p_path)
                         st.session_state.profiles_list = profiles_list
                         st.rerun()
 
@@ -709,122 +773,16 @@ with _profile_col:
 
         st.markdown('<hr class="profile-item-divider">', unsafe_allow_html=True)
 
-        # --- Add account form ---
-        if st.session_state.get("show_add_profile_form"):
-            st.markdown(
-                '<div class="profile-popover-header" style="font-size:0.88rem;">'
-                'Google 계정 연결</div>',
-                unsafe_allow_html=True,
-            )
+        _google_login_button("popover")
 
-            new_name = st.text_input(
-                "이름",
-                placeholder="Google 표시 이름",
-                key="new_profile_name",
-            )
-            new_email = st.text_input(
-                "이메일",
-                placeholder="example@gmail.com",
-                key="new_profile_email",
-            )
 
-            # Auto-detect Chrome path
-            auto_path = ""
-            if new_email:
-                auto_path = config.find_chrome_profile_by_email(new_email)
+if browser_automation.google_login_status():
+    _google_login_watcher()
 
-            if auto_path:
-                st.markdown(
-                    f'<div style="font-size:0.78rem;color:#28a745;margin-bottom:4px;">'
-                    f'Chrome 프로필 자동 감지됨</div>',
-                    unsafe_allow_html=True,
-                )
-                new_path = st.text_input(
-                    "Chrome 프로필 경로",
-                    value=auto_path,
-                    key="new_profile_path",
-                    help="chrome://version 에서 확인 가능",
-                )
-            else:
-                # Try to suggest detected profiles
-                detected = config.detect_chrome_profiles()
-                detected_options = [
-                    f"{d['name']} ({d['email']})" if d.get('email')
-                    else d['name']
-                    for d in detected
-                ]
-                if detected_options:
-                    st.markdown(
-                        '<div style="font-size:0.78rem;color:#6b7280;margin-bottom:2px;">'
-                        '감지된 Chrome 프로필:</div>',
-                        unsafe_allow_html=True,
-                    )
-                    selected_detected = st.selectbox(
-                        "감지된 프로필",
-                        options=["직접 입력"] + detected_options,
-                        key="detected_profile_select",
-                        label_visibility="collapsed",
-                    )
-                    if selected_detected != "직접 입력":
-                        det_idx = detected_options.index(selected_detected)
-                        det = detected[det_idx]
-                        if not new_name:
-                            new_name = det.get("display", det.get("name", ""))
-                        if not new_email:
-                            new_email = det.get("email", "")
-                        auto_path = det.get("path", "")
-
-                new_path = st.text_input(
-                    "Chrome 프로필 경로",
-                    value=auto_path,
-                    placeholder="C:/Users/.../Chrome/User Data/Profile 1",
-                    key="new_profile_path",
-                    help="chrome://version 에서 확인 가능",
-                )
-
-            save_col, cancel_col = st.columns(2)
-            with save_col:
-                if st.button(
-                    "연결", use_container_width=True, type="primary",
-                    key="save_new_profile_btn",
-                ):
-                    if not new_path or not new_path.strip():
-                        st.error("Chrome 프로필 경로를 입력해주세요.")
-                    else:
-                        new_profile = {
-                            "name": new_name.strip() or "계정",
-                            "email": new_email.strip(),
-                            "picture": "",
-                            "path": new_path.strip(),
-                        }
-                        profiles_list.append(new_profile)
-                        config.save_profiles(profiles_list)
-                        st.session_state.profiles_list = profiles_list
-                        config.CHROME_PROFILES = [
-                            p["path"] for p in profiles_list if p.get("path")
-                        ]
-                        st.session_state.show_add_profile_form = False
-                        st.toast(
-                            f"'{new_profile['name']}' 계정이 연결되었습니다."
-                        )
-                        st.rerun()
-            with cancel_col:
-                if st.button(
-                    "취소", use_container_width=True,
-                    key="cancel_new_profile_btn",
-                ):
-                    st.session_state.show_add_profile_form = False
-                    st.rerun()
-        else:
-            if st.button(
-                "Google 계정 연결",
-                use_container_width=True,
-                type="primary",
-                key="add_profile_btn",
-                icon=":material/person_add:",
-            ):
-                st.session_state.show_add_profile_form = True
-                st.rerun()
+if st.session_state.login_notice:
+    _notice_kind, _notice_message = st.session_state.login_notice
+    st.session_state.login_notice = None
+    getattr(st, _notice_kind)(_notice_message)
 
 
 # ---------------------------------------------------------------------------
@@ -869,6 +827,20 @@ def _reset_pagination():
     st.session_state.search_total_results = 0
     st.session_state.search_has_more = False
     st.session_state.search_mode = ""
+
+
+def _select_video(video: dict):
+    with st.spinner("상세 정보 로딩 중..."):
+        try:
+            st.session_state.selected_video = youtube_api.get_video_details(video["videoId"]) or video
+        except Exception as e:
+            config.log_error("get_video_details", e, f"videoId={video.get('videoId')}")
+            st.session_state.selected_video = video
+    # A new video invalidates anything generated for the previous one.
+    st.session_state.ai_result = None
+    st.session_state.confirmed_comment = None
+    st.session_state.edited_comment = ""
+    go_to_step(2)
 
 
 # ===========================================================================
@@ -944,6 +916,8 @@ if current == 1:
                     st.error("유효한 YouTube URL이 아닙니다.")
                 elif vid in database.get_posted_video_ids():
                     st.error("이미 댓글을 게시한 영상이라 선택할 수 없습니다.")
+                elif not st.session_state.profiles_list:
+                    show_login_required_dialog()
                 else:
                     with st.spinner("영상 정보를 불러오는 중..."):
                         try:
@@ -1026,26 +1000,10 @@ if current == 1:
                             key=f"select_{cur_page}_{idx}",
                             use_container_width=True,
                         ):
-                            with st.spinner("상세 정보 로딩 중..."):
-                                try:
-                                    details = youtube_api.get_video_details(
-                                        video["videoId"]
-                                    )
-                                    if details:
-                                        st.session_state.selected_video = details
-                                    else:
-                                        st.session_state.selected_video = video
-                                except Exception as e:
-                                    config.log_error(
-                                        "get_video_details", e,
-                                        f"videoId={video.get('videoId')}",
-                                    )
-                                    st.session_state.selected_video = video
-                                # Reset downstream state when selecting a new video
-                                st.session_state.ai_result = None
-                                st.session_state.confirmed_comment = None
-                                st.session_state.edited_comment = ""
-                                go_to_step(2)
+                            if st.session_state.profiles_list:
+                                _select_video(video)
+                            else:
+                                show_login_required_dialog()
 
                 st.divider()
 

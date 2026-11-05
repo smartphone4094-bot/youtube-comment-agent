@@ -58,10 +58,12 @@ CHROME_PROFILE_3=
 
 ### 4. 크롬 프로필 설정
 
-1. Chrome 주소창에 `chrome://version` 입력하여 프로필 경로 확인
-2. 새 프로필 생성 (유튜브1, 유튜브2, 유튜브3)
-3. 각 프로필에서 구글 계정 로그인
-4. 프로필 경로를 `.env`에 입력
+1. 앱 상단의 프로필 버튼 → **Google 계정으로 로그인** 클릭
+2. 새로 열린 Chrome 창에서 Google 계정에 로그인
+3. 로그인 후 그 Chrome 창을 닫으면 계정이 자동으로 연결됩니다
+4. 계정마다 반복 (앱 전용 Chrome 프로필은 `%LOCALAPPDATA%/MarketingAIAgent/chrome_profiles`에 저장)
+
+> 기존 방식처럼 `.env`의 `CHROME_PROFILE_1~3`에 프로필 경로를 직접 적어도 됩니다 (`data/profiles.json`이 없을 때만 사용).
 
 ### 5. 실행
 

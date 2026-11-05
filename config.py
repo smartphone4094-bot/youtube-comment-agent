@@ -1,6 +1,8 @@
 import json
 import os
 import re
+import shutil
+import uuid
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -17,10 +19,6 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
 # 어떤 AI를 쓸지: "openrouter" 또는 "anthropic"
 AI_PROVIDER = os.getenv("AI_PROVIDER", "openrouter")
-
-# Google OAuth 설정 (프로필 관리용)
-GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
-GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 
 DAILY_MAX_COMMENTS = int(os.getenv("DAILY_MAX_COMMENTS", "10"))
 COMMENT_MIN_CHARS = int(os.getenv("COMMENT_MIN_CHARS", "40"))
@@ -50,9 +48,9 @@ def _load_profiles_from_env() -> list[dict]:
 
 
 def load_profiles() -> list[dict]:
-    profiles = _load_profiles_from_json()
-    if profiles:
-        return profiles
+    # An existing file wins even when empty, so disconnected accounts stay disconnected.
+    if os.path.exists(_PROFILES_PATH):
+        return _load_profiles_from_json()
     return _load_profiles_from_env()
 
 
@@ -62,7 +60,25 @@ def save_profiles(profiles: list[dict]):
         json.dump(profiles, f, ensure_ascii=False, indent=2)
 
 
-CHROME_PROFILES = [p["path"] for p in load_profiles()]
+# App-owned Chrome profiles hold Google login sessions, so they live outside the repository.
+_MANAGED_PROFILES_DIR = os.path.join(
+    os.getenv("LOCALAPPDATA") or os.path.join(os.path.dirname(__file__), "data"),
+    "MarketingAIAgent",
+    "chrome_profiles",
+)
+
+
+def new_managed_profile_dir() -> str:
+    path = os.path.join(_MANAGED_PROFILES_DIR, uuid.uuid4().hex)
+    os.makedirs(path)
+    return path
+
+
+def remove_managed_profile(path: str):
+    """Delete an app-owned profile. Any other path, such as the user's own Chrome, is left alone."""
+    root = os.path.normcase(os.path.abspath(_MANAGED_PROFILES_DIR)) + os.sep
+    if path and os.path.normcase(os.path.abspath(path)).startswith(root):
+        shutil.rmtree(path, ignore_errors=True)
 
 
 # ---------------------------------------------------------------------------
@@ -117,65 +133,6 @@ def read_error_log_by_date(target_date=None, limit: int = 50) -> list[str]:
         return []
 
 
-# ---------------------------------------------------------------------------
-# Chrome profile auto-detection
-# ---------------------------------------------------------------------------
-def detect_chrome_profiles() -> list[dict]:
-    """Scan Chrome User Data directory and return detected profiles.
-
-    Each entry contains:
-        name     - Chrome profile directory name (e.g. "Profile 1")
-        path     - Full path to the profile directory
-        email    - Google account email (if found in Preferences)
-        display  - Google account display name (if found)
-        picture  - Google account picture URL (if found)
-    """
-    username = os.getenv("USERNAME") or os.getenv("USER") or ""
-    chrome_base = os.path.join(
-        "C:/Users", username, "AppData/Local/Google/Chrome/User Data"
-    )
-    if not os.path.isdir(chrome_base):
-        return []
-
-    detected: list[dict] = []
-    candidates = ["Default"] + [f"Profile {i}" for i in range(1, 20)]
-    for profile_dir in candidates:
-        profile_path = os.path.join(chrome_base, profile_dir)
-        prefs_path = os.path.join(profile_path, "Preferences")
-        if not os.path.isfile(prefs_path):
-            continue
-        try:
-            with open(prefs_path, encoding="utf-8") as f:
-                prefs = json.load(f)
-
-            # Account info lives in different places depending on Chrome version
-            account_info = prefs.get("account_info", [])
-            email = ""
-            display_name = ""
-            picture_url = ""
-            if account_info and isinstance(account_info, list):
-                first = account_info[0] if account_info else {}
-                email = first.get("email", "")
-                display_name = first.get("full_name", "")
-                picture_url = first.get("last_downloaded_image_url_with_size", "")
-
-            # Fallback: profile.name
-            if not display_name:
-                display_name = prefs.get("profile", {}).get("name", profile_dir)
-
-            detected.append({
-                "name": display_name or profile_dir,
-                "path": profile_path.replace("\\", "/"),
-                "email": email,
-                "display": display_name,
-                "picture": picture_url,
-            })
-        except (json.JSONDecodeError, OSError, KeyError):
-            continue
-
-    return detected
-
-
 def read_chrome_profile_info(profile_path: str) -> dict:
     """Read Google account info from a Chrome profile's Preferences file.
 
@@ -216,17 +173,3 @@ def read_chrome_profile_info(profile_path: str) -> dict:
         pass
 
     return result
-
-
-def find_chrome_profile_by_email(email: str) -> str:
-    """Try to find the Chrome profile path matching the given email.
-
-    Returns the profile path string, or empty string if not found.
-    """
-    if not email:
-        return ""
-    detected = detect_chrome_profiles()
-    for p in detected:
-        if p.get("email", "").lower() == email.lower():
-            return p["path"]
-    return ""

@@ -197,11 +197,8 @@ class FakeConfig(_Proxy):
     def read_chrome_profile_info(self, profile_path):
         return {"name": "", "email": "", "picture": ""}
 
-    def detect_chrome_profiles(self):
-        return []
-
-    def find_chrome_profile_by_email(self, email):
-        return ""
+    def remove_managed_profile(self, path):
+        pass
 
     def log_error(self, source, error, context=""):
         pass
@@ -227,6 +224,27 @@ class FakeConfig(_Proxy):
 
 
 class FakeBrowser(_Proxy):
+    _login_polls = None  # class-level: this object is rebuilt on every script run
+
+    def start_google_login(self):
+        FakeBrowser._login_polls = 0
+
+    def google_login_status(self):
+        if FakeBrowser._login_polls is None:
+            return None
+        FakeBrowser._login_polls += 1
+        return "open" if FakeBrowser._login_polls < 8 else "closed"
+
+    def cancel_google_login(self):
+        FakeBrowser._login_polls = None
+
+    def finish_google_login(self):
+        FakeBrowser._login_polls = None
+        if self._mode == "empty":
+            return None  # window closed without signing in
+        email = "test@example.com" if self._mode == "one" else "new.account@example.com"
+        return {"name": "새로 연결한 계정", "email": email, "picture": "", "path": "fixture"}
+
     def get_available_profiles(self):
         names = ["Aleksandra Wiśniewska-Kowalczyk Christopher Alexander Montgomery III", "Jo"]
         return [{"index": i, "name": n, "path": "fixture"} for i, n in enumerate(names)]
